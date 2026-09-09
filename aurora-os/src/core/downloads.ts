@@ -1,0 +1,109 @@
+import { storageManager, type StorageItem } from './StorageManager';
+import { notificationService } from './NotificationService';
+import { useMediaStore } from '../stores/useMediaStore';
+import { isNative, nativeBinaryRequest, onNativeDownload, onNativeDownloadImage } from './native';
+
+type ImageListener = (info: { filename: string; dataUrl: string }) => void;
+
+const imageListeners = new Set<ImageListener>();
+
+export function onImageDownloaded(fn: ImageListener): () => void {
+  imageListeners.add(fn);
+  return () => {
+    imageListeners.delete(fn);
+  };
+}
+
+export function isImageItem(item: StorageItem): boolean {
+  return item.content?.startsWith('data:image/') === true;
+}
+
+function emitImage(item: StorageItem): void {
+  if (!isImageItem(item) || !item.content) return;
+  imageListeners.forEach(fn => {
+    try {
+      fn({ filename: item.name, dataUrl: item.content! });
+    } catch {
+      /* noop */
+    }
+  });
+}
+
+function fileNameFromUrl(raw: string): string {
+  try {
+    const u = new URL(raw);
+    const last = u.pathname.split('/').filter(Boolean).pop() ?? '';
+    if (/\.\w{1,5}$/i.test(last)) return last;
+    return `${u.hostname.replace('www.', '')}.html`;
+  } catch {
+    return 'descarga.html';
+  }
+}
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(fr.result as string);
+    fr.onerror = () => reject(fr.error ?? new Error('FileReader'));
+    fr.readAsDataURL(blob);
+  });
+}
+
+// Guarda una descarga (binario como data-URL) en Downloads y avisa.
+export function saveDownloadPayload(filename: string, mimeType: string, dataUrl: string): StorageItem | null {
+  try {
+    const item = storageManager.createFile(filename, 'downloads', dataUrl, mimeType || 'application/octet-stream');
+    emitImage(item);
+    // Las imágenes descargadas también entran a Fotos (Galería), donde pueden
+    // verse y usarse como fondo de pantalla.
+    if (isImageItem(item) && item.content) {
+      try {
+        const media = useMediaStore.getState();
+        if (!media.photos.some(p => p.uri === item.content)) {
+          media.addPhoto(item.content, filename.replace(/\.[a-z0-9]+$/i, ''));
+        }
+      } catch {
+        /* sin espacio en Fotos, no bloquea la descarga */
+      }
+    }
+    notificationService.push('file-manager', 'Descarga completa', `${filename}`);
+    return item;
+  } catch (e) {
+    notificationService.push('browser', 'Descarga fallida', e instanceof Error ? e.message : 'Error');
+    return null;
+  }
+}
+
+// Descarga una URL y la guarda en Downloads. Web: vía /proxy. Nativo: fetch del
+// proceso principal (sin CORS) con base64.
+export async function saveUrlToStore(url: string): Promise<StorageItem | null> {
+  try {
+    const filename = fileNameFromUrl(url);
+    if (isNative()) {
+      const res = await nativeBinaryRequest(url);
+      if (!res.ok || !res.dataUrl) {
+        throw new Error(res.text ? `HTTP ${res.text}` : 'Error de red');
+      }
+      return saveDownloadPayload(filename, res.mimeType ?? 'application/octet-stream', res.dataUrl);
+    }
+    const r = await fetch(`/proxy?url=${encodeURIComponent(url)}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const blob = await r.blob();
+    const dataUrl = await blobToDataUrl(blob);
+    return saveDownloadPayload(filename, blob.type || 'application/octet-stream', dataUrl);
+  } catch (e) {
+    notificationService.push('browser', 'Descarga fallida', e instanceof Error ? e.message : 'Error');
+    return null;
+  }
+}
+
+// Recibe las descargas reales de los webviews (will-download en el proceso principal).
+if (isNative()) {
+  onNativeDownload(({ filename, mimeType, dataUrl }) => {
+    saveDownloadPayload(filename, mimeType, dataUrl);
+  });
+  // "Guardar imagen" del menú contextual de los webviews.
+  onNativeDownloadImage((url) => {
+    saveUrlToStore(url);
+  });
+}
