@@ -5,7 +5,8 @@ import { memoryManager } from '../MemoryManager';
 import { storageManager } from '../StorageManager';
 import { isNative, nativeRequest } from '../native';
 import { parseDdgHtml } from '../ddg';
-import { openInOs } from '../browserSession';
+import { openInOs, openSearchInOs } from '../browserSession';
+import { eventBus } from '../EventBus';
 import type { AssistantTool } from './types';
 
 export const ACCENT = (s: string): string =>
@@ -36,7 +37,7 @@ export function resolveAppId(query: string): string | null {
     reloj: 'clock', alarma: 'clock', temporizador: 'clock',
     calculadora: 'calculator', calc: 'calculator',
     archivos: 'file-manager', ficheros: 'file-manager', explorar: 'file-manager',
-    'chocolate plan': 'chocolate-plan', asistente: 'chocolate-plan',
+    chocolate: 'chocolate-plan', 'chocolate plan': 'chocolate-plan', asistente: 'chocolate-plan',
     calendario: 'calendar', agenda: 'calendar',
     mapas: 'maps', mapa: 'maps',
     noticias: 'news', periodico: 'news',
@@ -92,6 +93,7 @@ export const tools: AssistantTool[] = [
     name: 'open_app',
     description: 'Abrir una aplicación del teléfono.',
     args: [{ name: 'app', type: 'string', description: 'Nombre o id de la aplicación' }],
+    navigates: true,
     run: (args) => {
       const id = typeof args.app === 'string' ? resolveAppId(args.app) : null;
       if (!id) return `No encontré la app "${args.app}". Apps disponibles: ${listAppNames()}`;
@@ -235,9 +237,22 @@ export const tools: AssistantTool[] = [
     },
   },
   {
+    name: 'open_search',
+    description: 'Abrir el navegador Safari del teléfono con una búsqueda web.',
+    args: [{ name: 'query', type: 'string', description: 'Consulta a buscar en la web' }],
+    navigates: true,
+    run: (args) => {
+      const query = String(args.query ?? '').trim();
+      if (!query) return 'Consulta vacía.';
+      openSearchInOs(query);
+      return `Abriendo Safari con la búsqueda "${query}".`;
+    },
+  },
+  {
     name: 'open_url',
     description: 'Abrir una página web en el navegador del teléfono.',
     args: [{ name: 'url', type: 'string', description: 'Dirección web completa con https://' }],
+    navigates: true,
     run: (args) => {
       const url = String(args.url ?? '').trim();
       if (!/^https?:\/\//i.test(url)) return 'URL inválida: debe empezar con https://';
@@ -270,6 +285,7 @@ export async function parseToolTokens(raw: string): Promise<{ text: string; conf
       try {
         const res = await tool.run(args);
         if (res) confirmations.push(res);
+        if (tool.navigates) eventBus.emit('assistant:navigate', res);
       } catch {
         confirmations.push(`La herramienta ${name} falló.`);
       }

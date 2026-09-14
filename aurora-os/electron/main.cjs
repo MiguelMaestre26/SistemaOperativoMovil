@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, session, ipcMain, clipboard } = require('electron');
+const { app, BrowserWindow, Menu, session, ipcMain, clipboard, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -87,6 +87,13 @@ app.whenReady().then(() => {
     'persist:aurora-tg',
     'persist:aurora-browser-google',
     'persist:aurora-browser-firefox',
+    'persist:aurora-youtube',
+    'persist:aurora-hbomax',
+    'persist:aurora-disney',
+    'persist:aurora-netflix',
+    'persist:aurora-gmail',
+    'persist:aurora-ujap-admin',
+    'persist:aurora-ujap-acropolis',
   ];
   for (const p of partitions) {
     const ses = session.fromPartition(p);
@@ -186,5 +193,14 @@ ipcMain.handle('net:request', async (_event, { url, method = 'GET', body, binary
     return { ok: res.ok, status: res.status, text };
   } catch (err) {
     return { ok: false, status: 0, text: err instanceof Error ? err.message : String(err) };
+  }
+});
+
+// Abre un enlace en el navegador real del sistema (Widevine/DRM incluido).
+// Se usa como alternativa para webs embebidas que no pueden reproducir
+// contenido protegido dentro del webview de Electron.
+ipcMain.handle('shell:openExternal', async (_event, url) => {
+  if (typeof url === 'string' && /^https?:/i.test(url)) {
+    await shell.openExternal(url);
   }
 });

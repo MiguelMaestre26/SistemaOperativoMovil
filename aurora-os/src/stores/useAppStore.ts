@@ -25,7 +25,12 @@ const APP_MEMORY: Record<string, number> = {
   calculator: 48, clock: 32, notes: 64, settings: 80,
   'file-manager': 96, camera: 128, gallery: 112, browser: 196,
   phone: 72, messages: 88, weather: 48, music: 108, email: 120,
-  'chocolate-plan': 256,
+  'chocolate-plan': 256, pokedex: 128,
+  telegram: 128, whatsapp: 196, youtube: 220,
+  'hbo-max': 240, 'disney-plus': 260, netflix: 260, gmail: 180,
+  snake: 64,
+  'ujap-en-linea': 180, 'acropolis-ujap': 180,
+  'geometry-dash': 220,
 };
 
 export const useAppStore = create<AppStore>((set, get) => ({

@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import {
-  Mail, Plus, ChevronLeft, Send, Star, RotateCw, Trash2, AtSign,
+  Mail, Plus, Send, Star, RotateCw, Trash2, AtSign,
 } from 'lucide-react';
 import { usePersistedState } from '../../../core/persistence';
 import { notificationService } from '../../../core/NotificationService';
+import {
+  Screen, AppHeader, ListGroup, ListRow, IconButton, Badge, EmptyState, Button,
+} from '../../ui';
 
 interface Email {
   id: string;
@@ -93,46 +96,62 @@ export default function EmailApp() {
     const mail = mails.find(m => m.id === openId);
     if (mail) {
       return (
-        <div style={styles.container}>
-          <div style={styles.msgHeader}>
-            <button style={styles.iconBtn} onClick={() => setOpenId(null)} aria-label="Volver">
-              <ChevronLeft size={22} color="#007AFF" />
-            </button>
-            <button style={styles.iconBtn} onClick={() => openCompose(mail)} aria-label="Responder">
-              <RotateCw size={18} color="#007AFF" style={{ transform: 'scaleX(-1)' }} />
-            </button>
-            <button style={styles.iconBtn} onClick={() => remove(mail.id)} aria-label="Eliminar">
-              <Trash2 size={18} color="#FF3B30" />
-            </button>
-          </div>
+        <Screen scroll={false} padding="0">
+          <AppHeader
+            variant="standard"
+            title=""
+            onBack={() => setOpenId(null)}
+            backLabel=""
+            right={
+              <div style={{ display: 'flex', gap: 4 }}>
+                <IconButton label="Responder" onClick={() => openCompose(mail)}>
+                  <RotateCw size={17} color="var(--accent)" style={{ transform: 'scaleX(-1)' }} />
+                </IconButton>
+                <IconButton label="Eliminar" bg="rgba(255,59,48,0.12)" onClick={() => remove(mail.id)}>
+                  <Trash2 size={17} color="var(--danger)" />
+                </IconButton>
+              </div>
+            }
+          />
           <div style={styles.msgScroll}>
-            <div style={styles.msgSubject}>{mail.subject}</div>
+            <div className="typo-title2" style={styles.msgSubject}>{mail.subject}</div>
             <div style={styles.msgFrom}>De: <b>{mail.from}</b></div>
             <div style={styles.msgMeta}>
               {mail.to} · {new Date(mail.at).toLocaleString('es', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}
             </div>
             <div style={styles.msgBody}>{mail.body}</div>
-            <button style={styles.replyBtn} onClick={() => openCompose(mail)}>
+            <Button
+              variant="primary"
+              size="sm"
+              style={{ alignSelf: 'flex-start', borderRadius: 20, padding: '10px 18px', display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 600 }}
+              onClick={() => openCompose(mail)}
+            >
               <RotateCw size={14} color="#fff" style={{ transform: 'scaleX(-1)' }} /> Responder
-            </button>
+            </Button>
           </div>
-        </div>
+        </Screen>
       );
     }
   }
 
   if (view === 'compose') {
     return (
-      <div style={styles.container}>
-        <div style={styles.msgHeader}>
-          <button style={styles.iconBtn} onClick={() => setView('inbox')} aria-label="Cancelar">
-            <ChevronLeft size={22} color="#007AFF" />
-          </button>
-          <span style={styles.composeTitle}>{replyTo ? 'Responder' : 'Nuevo correo'}</span>
-          <button style={styles.sendTop} onClick={send} disabled={!to.trim() || !subject.trim()}>
-            <Send size={18} color={to.trim() && subject.trim() ? '#007AFF' : '#C7C7CC'} />
-          </button>
-        </div>
+      <Screen scroll={false} padding="0">
+        <AppHeader
+          variant="standard"
+          title={replyTo ? 'Responder' : 'Nuevo correo'}
+          onBack={() => setView('inbox')}
+          backLabel=""
+          right={
+            <IconButton
+              label="Enviar"
+              color={to.trim() && subject.trim() ? 'var(--accent)' : 'var(--text-tertiary)'}
+              onClick={send}
+            >
+              <Send size={18} color={to.trim() && subject.trim() ? 'var(--accent)' : 'var(--text-tertiary)'} />
+            </IconButton>
+          }
+        />
         <div style={styles.composeBody}>
           <div style={styles.fieldRow}>
             <span style={styles.fieldLabel}>Para</span>
@@ -150,195 +169,95 @@ export default function EmailApp() {
             autoFocus
           />
         </div>
-      </div>
+      </Screen>
     );
   }
 
   return (
-    <div style={styles.container}>
-      <div style={styles.header}>
-        <span style={styles.title}>Correo</span>
-        <button style={styles.iconBtn} onClick={() => openCompose()} aria-label="Redactar">
-          <Plus size={22} color="#007AFF" />
-        </button>
-      </div>
+    <Screen>
+      <AppHeader
+        title="Correo"
+        right={
+          <IconButton label="Redactar" bg="var(--accent)" onClick={() => openCompose()}>
+            <Plus size={20} color="#fff" />
+          </IconButton>
+        }
+      />
 
-      <div style={styles.list}>
-        {sorted.length === 0 ? (
-          <div style={styles.empty}>
-            <Mail size={42} color="#E5E5EA" />
-            <div style={styles.emptyText}>Bandeja vacía.</div>
-          </div>
-        ) : (
-          sorted.map(m => (
-            <button key={m.id} style={styles.item} onClick={() => open(m.id)}>
-              <div style={styles.avatar}>
-                <AtSign size={14} color="#fff" />
-              </div>
-              <div style={styles.itemMain}>
-                <div style={styles.itemTop}>
-                  <span style={{ ...styles.itemFrom, fontWeight: m.read ? 500 : 700, color: m.read ? '#333' : '#111' }}>
-                    {m.from}
-                  </span>
+      {sorted.length === 0 ? (
+        <EmptyState
+          icon={<Mail size={28} color="var(--text-secondary)" />}
+          title="Bandeja vacía."
+        />
+      ) : (
+        <ListGroup>
+          {sorted.map((m, i) => (
+            <ListRow
+              key={m.id}
+              showSeparator={i < sorted.length - 1}
+              icon={<AtSign size={14} color="#fff" />}
+              iconBg={m.read ? 'var(--bg-tertiary)' : 'var(--accent)'}
+              label={m.from}
+              sublabel={m.subject}
+              onClick={() => open(m.id)}
+              value={
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  {!m.read && <Badge dot color="var(--accent)" />}
                   <span style={styles.itemTime}>
                     {new Date(m.at).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}
                   </span>
+                  <button
+                    className="pressable"
+                    style={styles.starBtn}
+                    onClick={e => { e.stopPropagation(); toggleStar(m.id); }}
+                    aria-label="Marcar estrella"
+                  >
+                    <Star size={15} color={m.starred ? '#FFD700' : 'var(--text-tertiary)'} fill={m.starred ? '#FFD700' : 'none'} />
+                  </button>
                 </div>
-                <div style={styles.itemSubject}>
-                  {!m.read && <span style={styles.unreadDot} />}
-                  <span style={{ fontWeight: m.read ? 400 : 600, color: m.read ? '#8E8E93' : '#333' }}>
-                    {m.subject}
-                  </span>
-                </div>
-                <div style={styles.itemPreview}>{m.body.replace(/\n/g, ' ')}</div>
-              </div>
-              <button
-                style={styles.starBtn}
-                onClick={e => { e.stopPropagation(); toggleStar(m.id); }}
-                aria-label="Marcar estrella"
-              >
-                <Star size={16} color={m.starred ? '#FFD700' : '#E5E5EA'} fill={m.starred ? '#FFD700' : '#E5E5EA'} />
-              </button>
-            </button>
-          ))
-        )}
-      </div>
+              }
+            />
+          ))}
+        </ListGroup>
+      )}
 
       {unread > 0 && (
         <div style={styles.unreadBar}>{unread} sin leer</div>
       )}
-    </div>
+    </Screen>
   );
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  container: { height: '100%', display: 'flex', flexDirection: 'column', background: '#fff' },
-  header: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '12px 16px 6px',
-  },
-  title: { fontSize: 22, fontWeight: 700, color: '#111' },
-  iconBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    border: 'none',
-    background: 'none',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  list: { flex: 1, overflowY: 'auto', paddingBottom: 20 },
-  item: {
-    width: '100%',
-    display: 'flex',
-    alignItems: 'flex-start',
-    gap: 10,
-    border: 'none',
-    background: 'none',
-    padding: '12px 16px',
-    cursor: 'pointer',
-    borderBottom: '0.5px solid rgba(0,0,0,0.05)',
-    textAlign: 'left' as const,
-  },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    background: '#007AFF',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-    marginTop: 2,
-  },
-  itemMain: { flex: 1, minWidth: 0 },
-  itemTop: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
-  itemFrom: { fontSize: 14 },
-  itemTime: { fontSize: 11, color: '#8E8E93', flexShrink: 0 },
-  itemSubject: { fontSize: 13, marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 },
-  unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    background: '#007AFF',
-    flexShrink: 0,
-  },
-  itemPreview: {
-    fontSize: 12,
-    color: '#B0B0B5',
-    marginTop: 3,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-  },
+  itemTime: { fontSize: 11, color: 'var(--text-secondary)', flexShrink: 0 },
   starBtn: {
     border: 'none',
     background: 'none',
     cursor: 'pointer',
     padding: 2,
     flexShrink: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   unreadBar: {
     textAlign: 'center' as const,
     fontSize: 12,
-    color: '#007AFF',
+    color: 'var(--accent)',
     padding: '8px 0',
     background: 'rgba(0,122,255,0.06)',
   },
-  empty: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: 12,
-    marginTop: '40%',
-  },
-  emptyText: { color: '#C7C7CC', fontSize: 14 },
-  msgHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '8px 10px',
-    borderBottom: '0.5px solid rgba(0,0,0,0.08)',
-  },
   msgScroll: { flex: 1, overflowY: 'auto', padding: '16px 20px' },
-  msgSubject: { fontSize: 22, fontWeight: 700, color: '#111', lineHeight: 1.25 },
-  msgFrom: { fontSize: 14, color: '#333', marginTop: 14 },
-  msgMeta: { fontSize: 12, color: '#8E8E93', marginTop: 6 },
+  msgSubject: { color: 'var(--text-primary)', lineHeight: 1.25 },
+  msgFrom: { fontSize: 14, color: 'var(--text-primary)', marginTop: 14, userSelect: 'text' as const },
+  msgMeta: { fontSize: 12, color: 'var(--text-secondary)', marginTop: 6, userSelect: 'text' as const },
   msgBody: {
     fontSize: 15,
     lineHeight: 1.6,
-    color: '#333',
+    color: 'var(--text-primary)',
     marginTop: 18,
-    whiteSpace: 'pre-wrap',
-  },
-  replyBtn: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 24,
-    padding: '10px 18px',
-    borderRadius: 20,
-    border: 'none',
-    background: '#007AFF',
-    color: '#fff',
-    fontSize: 14,
-    cursor: 'pointer',
-  },
-  composeTitle: { fontSize: 15, fontWeight: 600, color: '#111' },
-  sendTop: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    border: 'none',
-    background: 'none',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
+    whiteSpace: 'pre-wrap' as const,
+    userSelect: 'text' as const,
   },
   composeBody: { flex: 1, display: 'flex', flexDirection: 'column' },
   fieldRow: {
@@ -346,11 +265,11 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: 10,
     padding: '12px 16px',
-    borderBottom: '0.5px solid rgba(0,0,0,0.06)',
+    borderBottom: '0.5px solid var(--separator-cell)',
   },
   fieldLabel: {
     fontSize: 13,
-    color: '#8E8E93',
+    color: 'var(--text-secondary)',
     width: 52,
     flexShrink: 0,
     fontWeight: 600,
@@ -360,8 +279,9 @@ const styles: Record<string, React.CSSProperties> = {
     border: 'none',
     outline: 'none',
     fontSize: 14,
-    color: '#111',
+    color: 'var(--text-primary)',
     background: 'none',
+    userSelect: 'text' as const,
   },
   bodyArea: {
     flex: 1,
@@ -370,8 +290,9 @@ const styles: Record<string, React.CSSProperties> = {
     resize: 'none',
     fontSize: 15,
     lineHeight: 1.6,
-    color: '#333',
+    color: 'var(--text-primary)',
     padding: '16px',
     background: 'none',
+    userSelect: 'text' as const,
   },
 };

@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Newspaper, ChevronLeft, ExternalLink, Star, Globe, Wifi } from 'lucide-react';
+import { Newspaper, ExternalLink, Star, Globe, Wifi } from 'lucide-react';
 import { usePersistedState } from '../../../core/persistence';
+import {
+  Screen, AppHeader, ListSection, ListRow, Chip, Button, IconButton, EmptyState, Skeleton,
+} from '../../ui';
 
 interface Article {
   id: string;
@@ -108,59 +111,60 @@ export default function News() {
 
   if (art) {
     return (
-      <div style={styles.container}>
-        <div style={styles.msgHeader}>
-          <button style={styles.iconBtn} onClick={() => setOpenId(null)} aria-label="Volver">
-            <ChevronLeft size={22} color="#007AFF" />
-          </button>
-          <span style={styles.brand}>{art.source}</span>
-          <button
-            style={styles.iconBtn}
-            onClick={() => setFavs(fs => (fs.includes(art.id) ? fs.filter(x => x !== art.id) : [...fs, art.id]))}
-            aria-label="Favorito"
-          >
-            <Star size={18} color={favs.includes(art.id) ? '#FFD700' : '#8E8E93'} fill={favs.includes(art.id) ? '#FFD700' : 'none'} />
-          </button>
-        </div>
+      <Screen scroll={false} padding="0">
+        <AppHeader
+          variant="standard"
+          title={art.source}
+          onBack={() => setOpenId(null)}
+          backLabel=""
+          right={
+            <IconButton
+              label="Favorito"
+              bg="transparent"
+              onClick={() => setFavs(fs => (fs.includes(art.id) ? fs.filter(x => x !== art.id) : [...fs, art.id]))}
+            >
+              <Star size={18} color={favs.includes(art.id) ? '#FFD700' : 'var(--text-tertiary)'} fill={favs.includes(art.id) ? '#FFD700' : 'none'} />
+            </IconButton>
+          }
+        />
         <div style={styles.artScroll}>
           <div style={styles.artSource}>{art.source}</div>
           <h1 style={styles.artTitle}>{art.title}</h1>
           <div style={styles.artDate}>{art.at}</div>
           <p style={styles.artBody}>{art.body}</p>
           {art.url && (
-            <button style={styles.openBtn} onClick={() => window.open(art.url, '_blank', 'noopener')}>
+            <Button
+              variant="primary"
+              onClick={() => window.open(art.url, '_blank', 'noopener')}
+              style={{ marginTop: 22, display: 'flex', alignItems: 'center', gap: 8, background: '#FF2D55' }}
+            >
               <ExternalLink size={14} color="#fff" /> Abrir original
-            </button>
+            </Button>
           )}
           <div style={{ height: 40 }} />
         </div>
-      </div>
+      </Screen>
     );
   }
 
   return (
-    <div style={styles.container}>
-      <div style={styles.header}>
-        <Newspaper size={20} color="#FF2D55" />
-        <span style={styles.title}>Noticias</span>
-        {live && <Globe size={16} color="#34C759" style={{ marginLeft: 'auto' }} />}
-      </div>
+    <Screen scroll={false} padding="0">
+      <AppHeader
+        title="Noticias"
+        right={live ? <Globe size={16} color="var(--success)" /> : undefined}
+      />
 
       <div style={styles.tabsRow}>
-        <button style={{ ...styles.tab, ...(source === null ? styles.tabActive : {}) }} onClick={() => setSource(null)}>
-          Todas
-        </button>
+        <Chip label="Todas" active={source === null} onClick={() => setSource(null)} />
         {SOURCES.map(s => (
-          <button key={s.id} style={{ ...styles.tab, ...(source === s.name ? styles.tabActive : {}) }} onClick={() => setSource(s.name)}>
-            {s.name}
-          </button>
+          <Chip key={s.id} label={s.name} active={source === s.name} onClick={() => setSource(s.name)} />
         ))}
       </div>
 
       <div style={{ padding: '0 16px' }}>
         {live ? (
           <div style={styles.statusRow}>
-            <Wifi size={12} color="#34C759" /> En vivo · fuentes RSS
+            <Wifi size={12} color="var(--success)" /> En vivo · fuentes RSS
           </div>
         ) : (
           <div style={styles.statusRow}>
@@ -171,144 +175,91 @@ export default function News() {
 
       <div style={styles.feed}>
         {loading ? (
-          <div style={styles.emptyTxt}>Cargando noticias…</div>
+          <div style={styles.skeletonList}>
+            <Skeleton height={104} radius={14} />
+            <Skeleton height={104} radius={14} />
+            <Skeleton height={104} radius={14} />
+          </div>
         ) : (
           <>
             {favList.length > 0 && (
-              <>
-                <div style={styles.sectionLabel}>Favoritos</div>
+              <ListSection title="Favoritos">
                 {favList.map(a => renderItem(a))}
-              </>
+              </ListSection>
             )}
-            <div style={styles.sectionLabel}>Últimas {source ?? 'noticias'}</div>
-            {viewed.map(a => renderItem(a))}
-            {viewed.length === 0 && favList.length === 0 && (
-              <div style={styles.emptyTxt}>Sin artículos en esta sección.</div>
-            )}
+            <ListSection title={`Últimas ${source ?? 'noticias'}`}>
+              {viewed.map(a => renderItem(a))}
+              {viewed.length === 0 && favList.length === 0 && (
+                <EmptyState
+                  icon={<Newspaper size={26} color="var(--text-secondary)" />}
+                  title="Sin artículos en esta sección."
+                />
+              )}
+            </ListSection>
           </>
         )}
       </div>
-    </div>
+    </Screen>
   );
 
   function renderItem(a: Article) {
     const isFav = favs.includes(a.id);
     return (
-      <button key={a.id} style={styles.item} onClick={() => open(a.id)}>
-        <div style={styles.itemMain}>
-          <div style={styles.itemTop}>
-            <span style={styles.itemSource}>{a.source}</span>
-            <div style={styles.itemTitleRow}>
-              {!read.includes(a.id) && <span style={styles.dot} />}
-              <span style={styles.itemTitle}>{a.title}</span>
-            </div>
-          </div>
-          <div style={styles.itemBody}>{a.body}</div>
-          <div style={styles.itemBottom}>
-            {isFav && <Star size={11} color="#FFD700" fill="#FFD700" />}
-          </div>
-        </div>
-      </button>
+      <ListRow
+        key={a.id}
+        icon={<Avatar source={a.source} />}
+        label={a.title}
+        sublabel={a.body}
+        onClick={() => open(a.id)}
+        value={
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {!read.includes(a.id) && <span style={styles.dot} />}
+            {isFav && <Star size={12} color="#FFD700" fill="#FFD700" />}
+          </span>
+        }
+      />
     );
   }
 }
 
+function Avatar({ source }: { source: string }) {
+  const initials = source.slice(0, 2).toUpperCase();
+  return (
+    <div
+      style={{
+        width: 34,
+        height: 34,
+        borderRadius: 10,
+        background: 'var(--bg-tertiary)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: 'var(--accent)',
+        fontSize: 13,
+        fontWeight: 700,
+        flexShrink: 0,
+      }}
+    >
+      {initials}
+    </div>
+  );
+}
+
 const styles: Record<string, React.CSSProperties> = {
-  container: { height: '100%', display: 'flex', flexDirection: 'column', background: '#fff' },
-  header: { display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px 6px' },
-  title: { fontSize: 22, fontWeight: 700, color: '#111' },
-  tabsRow: { display: 'flex', gap: 8, padding: '8px 16px 4px', overflowX: 'auto' },
-  tab: {
-    padding: '7px 14px',
-    borderRadius: 16,
-    border: '1px solid rgba(0,0,0,0.1)',
-    background: 'none',
-    color: '#111',
-    fontSize: 13,
-    cursor: 'pointer',
-    flexShrink: 0,
-  },
-  tabActive: { background: '#FF2D55', borderColor: '#FF2D55', color: '#fff' },
-  statusRow: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#8E8E93', padding: '6px 0' },
-  feed: { flex: 1, overflowY: 'auto', padding: '0 16px 20px' },
-  sectionLabel: {
-    fontSize: 11,
-    textTransform: 'uppercase' as const,
-    letterSpacing: 0.5,
-    color: '#8E8E93',
-    padding: '14px 0 6px',
-    fontWeight: 600,
-  },
-  item: {
-    width: '100%',
-    border: 'none',
-    background: '#F7F7F9',
-    borderRadius: 14,
-    padding: '13px 14px',
-    marginBottom: 10,
-    cursor: 'pointer',
-    textAlign: 'left' as const,
-  },
-  itemMain: { minWidth: 0 },
-  itemTop: { display: 'flex', flexDirection: 'column' as const, gap: 5 },
-  itemSource: { fontSize: 11, color: '#FF2D55', fontWeight: 700, textTransform: 'uppercase' as const },
-  itemTitleRow: { display: 'flex', alignItems: 'flex-start', gap: 6 },
-  itemTitle: { fontSize: 15, fontWeight: 700, color: '#111', lineHeight: 1.3 },
-  dot: { width: 8, height: 8, borderRadius: 4, background: '#FF2D55', flexShrink: 0, marginTop: 5 },
-  itemBody: {
-    fontSize: 13,
-    color: '#6E6E73',
-    marginTop: 6,
-    lineHeight: 1.5,
-    overflow: 'hidden',
-    display: '-webkit-box',
-    WebkitLineClamp: 3,
-    WebkitBoxOrient: 'vertical',
-  },
-  itemBottom: { display: 'flex', gap: 6, marginTop: 8, minHeight: 12 },
-  emptyTxt: { color: '#C7C7CC', fontSize: 14, textAlign: 'center' as const, padding: '40px 0' },
-  msgHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '8px 10px',
-    borderBottom: '0.5px solid rgba(0,0,0,0.08)',
-  },
-  iconBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    border: 'none',
-    background: 'none',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  brand: { fontSize: 14, fontWeight: 600, color: '#111' },
-  artScroll: { flex: 1, overflowY: 'auto', padding: '16px 20px' },
+  tabsRow: { display: 'flex', gap: 8, padding: '8px 16px 6px', overflowX: 'auto', flexShrink: 0 },
+  statusRow: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-secondary)', padding: '6px 0' },
+  feed: { flex: 1, overflowY: 'auto', padding: '0 0 24px' },
+  dot: { width: 8, height: 8, borderRadius: 4, background: '#FF2D55', flexShrink: 0, marginTop: 4 },
+  skeletonList: { display: 'flex', flexDirection: 'column', gap: 10, padding: '16px 16px 0' },
+  artScroll: { flex: 1, overflowY: 'auto', padding: '16px 20px 24px' },
   artSource: { fontSize: 12, color: '#FF2D55', fontWeight: 700, textTransform: 'uppercase' as const },
-  artTitle: { fontSize: 24, fontWeight: 700, color: '#111', lineHeight: 1.3, marginTop: 8 },
-  artDate: { fontSize: 12, color: '#8E8E93', marginTop: 10 },
+  artTitle: { fontSize: 24, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.3, marginTop: 8 },
+  artDate: { fontSize: 12, color: 'var(--text-secondary)', marginTop: 10 },
   artBody: {
     fontSize: 16,
     lineHeight: 1.7,
-    color: '#333',
+    color: 'var(--text-primary)',
     marginTop: 18,
     textAlign: 'justify' as const,
-  },
-  openBtn: {
-    marginTop: 22,
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    padding: '11px 18px',
-    borderRadius: 22,
-    border: 'none',
-    background: '#FF2D55',
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: 600,
-    cursor: 'pointer',
   },
 };

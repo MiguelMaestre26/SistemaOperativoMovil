@@ -1,9 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
-import { MessageSquare, MessageCircle, Send, Plus, ChevronLeft, Phone as PhoneIcon } from 'lucide-react';
+import {
+  MessageSquare, MessageCircle, Send, Plus,
+  Phone as PhoneIcon, Bell,
+} from 'lucide-react';
 import { usePersistedState } from '../../../core/persistence';
 import { notificationService } from '../../../core/NotificationService';
 import { openExternal, waLink, tgChat, TG_WEB, launchMessenger } from '../../../core/webapp';
 import { isNative } from '../../../core/native';
+import {
+  Screen, AppHeader, ListGroup, ListRow, Avatar, Badge, EmptyState, Sheet, IconButton,
+  openPrompt,
+} from '../../ui';
 
 interface Msg {
   id: string;
@@ -23,7 +30,7 @@ interface Conversation {
 type Service = 'aurora' | 'whatsapp' | 'telegram';
 
 const SERVICE_META: Record<Service, { label: string; icon: typeof Send; color: string }> = {
-  aurora: { label: 'Aurora', icon: MessageSquare, color: '#007AFF' },
+  aurora: { label: 'Aurora', icon: MessageSquare, color: 'var(--primary)' },
   whatsapp: { label: 'WhatsApp', icon: MessageCircle, color: '#25D366' },
   telegram: { label: 'Telegram', icon: Send, color: '#0088CC' },
 };
@@ -47,12 +54,13 @@ export default function Messages() {
   const [draft, setDraft] = useState('');
   const [typing, setTyping] = useState(false);
   const [service, setService] = useState<Service>('aurora');
-  const [callMenu, setCallMenu] = useState(false);
+  const [callOpen, setCallOpen] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const repliesRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => {
-    return () => repliesRef.current.forEach(t => clearTimeout(t));
+    const ref = repliesRef;
+    return () => ref.current.forEach(t => clearTimeout(t));
   }, []);
 
   useEffect(() => {
@@ -69,10 +77,14 @@ export default function Messages() {
     setConvs(cs => cs.map(c => (c.id === id && c.unread > 0 ? { ...c, unread: 0 } : c)));
   };
 
-  const newChat = () => {
-    const name = window.prompt('Nombre del contacto:');
+  const newChat = async () => {
+    const name = await openPrompt({ title: 'Nuevo mensaje', placeholder: 'Nombre del contacto' });
     if (!name?.trim()) return;
-    const number = window.prompt('Número (opcional, para WhatsApp/Telegram):');
+    const number = await openPrompt({
+      title: 'Nuevo mensaje',
+      message: 'Número (opcional, para WhatsApp/Telegram)',
+      placeholder: '8888-0000',
+    });
     const id = `c_${Date.now()}`;
     setConvs(cs => [{ id, name: name.trim(), number: number?.trim() || undefined, messages: [], unread: 0 }, ...cs]);
     setOpenId(id);
@@ -116,11 +128,14 @@ export default function Messages() {
       return;
     }
 
+    // eslint-disable-next-line react/purity
     const msg: Msg = { id: `m_${Date.now()}`, from: 'me', text, at: Date.now() };
     setConvs(cs => cs.map(c => (c.id === open.id ? { ...c, messages: [...c.messages, msg] } : c)));
     setDraft('');
     setTyping(true);
+    // eslint-disable-next-line react/purity
     const replyText = REPLIES[Math.floor(Math.random() * REPLIES.length)];
+    // eslint-disable-next-line react/purity
     const delay = 900 + Math.random() * 1400;
     const t = setTimeout(() => {
       const reply: Msg = { id: `m_${Date.now()}_r`, from: 'them', text: replyText, at: Date.now() };
@@ -143,7 +158,7 @@ export default function Messages() {
   };
 
   const callByService = (svc: Service) => {
-    setCallMenu(false);
+    setCallOpen(false);
     if (svc === 'aurora') return call();
     if (!open) return;
     if (isNative()) {
@@ -160,106 +175,97 @@ export default function Messages() {
 
   if (!open) {
     return (
-      <div style={styles.container}>
-        <div style={styles.header}>
-          <span style={styles.title}>Mensajes</span>
-          <button style={styles.addBtn} onClick={newChat} aria-label="Nuevo mensaje">
-            <Plus size={18} color="#fff" />
-          </button>
-        </div>
+      <Screen scroll={false} padding="0">
+        <AppHeader
+          title="Mensajes"
+          right={
+            <IconButton label="Nuevo mensaje" bg="var(--accent)" onClick={newChat}>
+              <Plus size={20} color="#fff" />
+            </IconButton>
+          }
+        />
+
         <div style={styles.quickBar}>
           <span style={styles.quickLabel}>Continuar en</span>
-          <button style={{ ...styles.quickBtn, background: '#25D366' }} onClick={() => launchMessenger('whatsapp')}>
+          <button className="pressable" style={{ ...styles.quickBtn, background: '#25D366' }} onClick={() => launchMessenger('whatsapp')}>
             <MessageCircle size={14} color="#fff" /> WhatsApp
           </button>
-          <button style={{ ...styles.quickBtn, background: '#0088CC' }} onClick={() => launchMessenger('telegram')}>
+          <button className="pressable" style={{ ...styles.quickBtn, background: '#0088CC' }} onClick={() => launchMessenger('telegram')}>
             <Send size={14} color="#fff" /> Telegram
           </button>
         </div>
+
         <div style={styles.list}>
           {sorted.length === 0 ? (
-            <div style={styles.empty}>
-              <MessageSquare size={42} color="#E5E5EA" />
-              <div style={styles.emptyText}>Sin conversaciones.<br />Toca + para escribirle a alguien.</div>
-            </div>
+            <EmptyState
+              icon={<MessageSquare size={28} color="var(--text-secondary)" />}
+              title="Sin conversaciones"
+              subtitle="Toca + para escribirle a alguien."
+            />
           ) : (
-            sorted.map(c => {
-              const last = c.messages.at(-1);
-              const partner = c.name;
-              return (
-                <button
-                  key={c.id}
-                  style={styles.item}
-                  onClick={() => { setOpenId(c.id); markRead(c.id); setService('aurora'); }}
-                >
-                  <div style={styles.avatar}>
-                    {partner.charAt(0).toUpperCase()}
-                  </div>
-                  <div style={styles.itemMain}>
-                    <div style={styles.itemTop}>
-                      <span style={styles.itemName}>{partner}</span>
-                    </div>
-                    <div style={styles.itemPreview}>
-                      {last ? `${last.from === 'me' ? 'Tú: ' : ''}${last.text}` : 'Nuevo contacto'}
-                    </div>
-                  </div>
-                  {c.unread > 0 && (
-                    <span style={styles.badge}>{c.unread}</span>
-                  )}
-                </button>
-              );
-            })
+            <ListGroup>
+              {sorted.map((c, i) => {
+                const last = c.messages.at(-1);
+                return (
+                  <ListRow
+                    key={c.id}
+                    showSeparator={i < sorted.length - 1}
+                    icon={<Avatar name={c.name} size={34} style={{ borderRadius: 10 }} />}
+                    label={c.name}
+                    sublabel={last ? `${last.from === 'me' ? 'Tú: ' : ''}${last.text}` : 'Nuevo contacto'}
+                    onClick={() => { setOpenId(c.id); markRead(c.id); setService('aurora'); }}
+                    value={c.unread > 0 ? <Badge count={c.unread} /> : undefined}
+                  />
+                );
+              })}
+            </ListGroup>
           )}
         </div>
-      </div>
+      </Screen>
     );
   }
 
   return (
-    <div style={styles.container}>
-      <div style={styles.chatHeader}>
-        <button style={styles.iconBtn} onClick={() => setOpenId(null)} aria-label="Volver">
-          <ChevronLeft size={22} color="#007AFF" />
-        </button>
-        <div style={styles.chatHeaderMain}>
-          <div style={styles.chatName}>{open.name}</div>
-          <div style={styles.chatStatus}>{typing ? 'escribiendo…' : 'en línea'}</div>
-        </div>
-        <button style={styles.iconBtn} onClick={() => setCallMenu(m => !m)} aria-label="Opciones de llamada">
-          <PhoneIcon size={18} color="#007AFF" />
-        </button>
-        {callMenu && (
-          <div style={styles.callMenu}>
-            <button style={styles.callMenuItem} onClick={() => callByService('aurora')}>
-              <PhoneIcon size={15} color="#007AFF" /> Llamar (Aurora)
-            </button>
-            <button style={styles.callMenuItem} onClick={() => callByService('whatsapp')}>
-              <MessageCircle size={15} color="#25D366" /> Llamar por WhatsApp
-            </button>
-            <button style={styles.callMenuItem} onClick={() => callByService('telegram')}>
-              <Send size={15} color="#0088CC" /> Llamar por Telegram
-            </button>
-          </div>
-        )}
-      </div>
+    <Screen scroll={false} padding="0">
+      <AppHeader
+        variant="standard"
+        title={open.name}
+        onBack={() => setOpenId(null)}
+        backLabel=""
+        right={
+          <IconButton label="Llamar" onClick={() => setCallOpen(true)}>
+            <PhoneIcon size={18} color="var(--accent)" />
+          </IconButton>
+        }
+      />
 
       <div ref={listRef} style={styles.chatBody}>
         {open.messages.map(m => (
-          <div key={m.id} style={{
-            ...styles.bubble,
-            alignSelf: m.from === 'me' ? 'flex-end' : 'flex-start',
-            background: m.from === 'me' ? '#007AFF' : '#E9E9EB',
-          }}>
-            <div style={{ ...styles.bubbleText, color: m.from === 'me' ? '#fff' : '#111' }}>
+          <div
+            key={m.id}
+            style={{
+              ...styles.bubble,
+              alignSelf: m.from === 'me' ? 'flex-end' : 'flex-start',
+              background: m.from === 'me' ? 'var(--accent)' : 'var(--bg-tertiary)',
+              borderBottomRightRadius: m.from === 'me' ? 4 : 18,
+              borderBottomLeftRadius: m.from === 'me' ? 18 : 4,
+            }}
+          >
+            <div style={{ ...styles.bubbleText, color: m.from === 'me' ? '#fff' : 'var(--text-primary)' }}>
               {m.text}
             </div>
-            <div style={{ ...styles.bubbleTime, color: m.from === 'me' ? 'rgba(255,255,255,0.7)' : '#8E8E93' }}>
+            <div
+              style={{
+                ...styles.bubbleTime,
+                color: m.from === 'me' ? 'rgba(255,255,255,0.75)' : 'var(--text-secondary)',
+              }}
+            >
               {new Date(m.at).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}
             </div>
           </div>
         ))}
         {typing && (
-          <div style={{ ...styles.bubble, alignSelf: 'flex-start', background: '#E9E9EB' }}>
+          <div style={{ ...styles.bubble, alignSelf: 'flex-start', background: 'var(--bg-tertiary)', borderBottomLeftRadius: 4 }}>
             <div style={styles.typingDots}>
               <span style={styles.dot} /><span style={{ ...styles.dot, animationDelay: '0.15s' }} /><span style={{ ...styles.dot, animationDelay: '0.3s' }} />
             </div>
@@ -275,7 +281,11 @@ export default function Messages() {
           return (
             <button
               key={s}
-              style={{ ...styles.serviceChip, ...(active ? { background: meta.color, color: '#fff' } : {}) }}
+              className="pressable"
+              style={{
+                ...styles.serviceChip,
+                ...(active ? { background: meta.color, color: '#fff', borderColor: meta.color } : {}),
+              }}
               onClick={() => setService(s)}
             >
               <Icon size={13} color={active ? '#fff' : meta.color} />
@@ -293,47 +303,39 @@ export default function Messages() {
           placeholder="Mensaje…"
           style={styles.input}
         />
-        <button style={styles.sendBtn} onClick={send} disabled={!draft.trim()} aria-label="Enviar">
-          <Send size={18} color={draft.trim() ? '#fff' : '#B0B0B5'} />
+        <button className="pressable" style={styles.sendBtn} onClick={send} disabled={!draft.trim()} aria-label="Enviar">
+          <Send size={18} color={draft.trim() ? '#fff' : 'rgba(255,255,255,0.5)'} />
         </button>
       </div>
-    </div>
+
+      <Sheet open={callOpen} onClose={() => setCallOpen(false)} title={`Llamar a ${open.name}`}>
+        <div style={styles.sheetBody}>
+          <button className="pressable" style={styles.sheetAction} onClick={() => callByService('aurora')}>
+            <PhoneIcon size={18} color="var(--primary)" /> Llamar (Aurora)
+          </button>
+          <button className="pressable" style={styles.sheetAction} onClick={() => callByService('whatsapp')}>
+            <MessageCircle size={18} color="#25D366" /> Llamar por WhatsApp
+          </button>
+          <button className="pressable" style={styles.sheetAction} onClick={() => callByService('telegram')}>
+            <Send size={18} color="#0088CC" /> Llamar por Telegram
+          </button>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <span style={styles.sheetHint}><Bell size={12} style={{ marginRight: 4, verticalAlign: -2 }} />Se abrirá el mensajero de tu preferencia</span>
+        </div>
+      </Sheet>
+    </Screen>
   );
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  container: {
-    height: '100%',
-    display: 'flex',
-    flexDirection: 'column',
-    background: '#fff',
-  },
-  header: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '12px 16px 8px',
-  },
-  title: { fontSize: 22, fontWeight: 700, color: '#111' },
-  addBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    border: 'none',
-    background: '#007AFF',
-    color: '#fff',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   quickBar: {
     display: 'flex',
     alignItems: 'center',
     gap: 8,
-    padding: '6px 14px 10px',
+    padding: '6px 14px 12px',
   },
-  quickLabel: { fontSize: 12, color: '#8E8E93', marginRight: 2 },
+  quickLabel: { fontSize: 12, color: 'var(--text-secondary)', marginRight: 2 },
   quickBtn: {
     display: 'flex',
     alignItems: 'center',
@@ -346,113 +348,15 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 700,
     cursor: 'pointer',
     flexShrink: 0,
-    boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+    boxShadow: 'var(--shadow-sm)',
   },
-  list: { flex: 1, overflowY: 'auto', padding: '0 0 20px' },
-  item: {
-    width: '100%',
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
-    border: 'none',
-    background: 'none',
-    padding: '10px 16px',
-    cursor: 'pointer',
-    textAlign: 'left' as const,
-  },
-  avatar: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    background: 'linear-gradient(135deg, #34C759, #30B0C7)',
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 600,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  itemMain: { flex: 1, minWidth: 0 },
-  itemTop: { display: 'flex', alignItems: 'center', gap: 6 },
-  itemName: { fontSize: 15, fontWeight: 600, color: '#111' },
-  itemPreview: {
-    fontSize: 13,
-    color: '#8E8E93',
-    marginTop: 2,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-  },
-  badge: {
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    background: '#FF3B30',
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 600,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '0 6px',
-  },
-  empty: {
+  list: {
+    flex: 1,
+    overflowY: 'auto',
+    padding: '0 0 20px',
     display: 'flex',
     flexDirection: 'column',
-    alignItems: 'center',
-    gap: 12,
-    marginTop: '40%',
   },
-  emptyText: { color: '#C7C7CC', fontSize: 14, textAlign: 'center' as const, lineHeight: 1.5 },
-  chatHeader: {
-    position: 'relative' as const,
-    display: 'flex',
-    alignItems: 'center',
-    padding: '8px 10px',
-    gap: 4,
-    borderBottom: '0.5px solid rgba(0,0,0,0.08)',
-  },
-  callMenu: {
-    position: 'absolute' as const,
-    right: 8,
-    top: 40,
-    width: 190,
-    zIndex: 40,
-    background: '#fff',
-    borderRadius: 12,
-    border: '0.5px solid rgba(0,0,0,0.1)',
-    boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
-    padding: 6,
-  },
-  callMenuItem: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    width: '100%',
-    padding: '9px 10px',
-    border: 'none',
-    background: 'transparent',
-    borderRadius: 8,
-    fontSize: 13,
-    color: '#111',
-    cursor: 'pointer',
-    textAlign: 'left' as const,
-  },
-  iconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    border: 'none',
-    background: 'none',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  chatHeaderMain: { flex: 1, minWidth: 0 },
-  chatName: { fontSize: 15, fontWeight: 600, color: '#111', textAlign: 'center' as const },
-  chatStatus: { fontSize: 11, color: '#30B0C7', textAlign: 'center' as const },
   chatBody: {
     flex: 1,
     overflowY: 'auto',
@@ -460,22 +364,29 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     gap: 8,
     padding: '14px 12px',
-    background: '#F7F7F9',
+    background: 'var(--bg-secondary)',
   },
   bubble: {
     maxWidth: '78%',
     borderRadius: 18,
     padding: '8px 12px',
-    borderBottomRightRadius: 4,
   },
   bubbleText: { fontSize: 14, lineHeight: 1.35 },
   bubbleTime: { fontSize: 10, marginTop: 3, textAlign: 'right' as const },
   typingDots: { display: 'flex', gap: 4, padding: '4px 2px' },
+  dot: {
+    width: 7,
+    height: 7,
+    borderRadius: '50%',
+    background: 'var(--text-secondary)',
+    animation: 'blink 1.2s infinite',
+  },
   serviceBar: {
     display: 'flex',
     gap: 8,
-    padding: '8px 12px 0',
+    padding: '10px 12px 0',
     justifyContent: 'center',
+    background: 'var(--bg-secondary)',
   },
   serviceChip: {
     display: 'flex',
@@ -483,47 +394,59 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 5,
     padding: '5px 12px',
     borderRadius: 14,
-    border: '1px solid rgba(0,0,0,0.08)',
-    background: '#F2F2F7',
-    color: '#111',
+    border: '1px solid var(--separator-cell)',
+    background: 'var(--surface-input)',
+    color: 'var(--text-primary)',
     fontSize: 12,
     fontWeight: 600,
     cursor: 'pointer',
-  },
-  dot: {
-    width: 7,
-    height: 7,
-    borderRadius: '50%',
-    background: '#8E8E93',
-    animation: 'blink 1.2s infinite',
   },
   inputBar: {
     display: 'flex',
     alignItems: 'center',
     gap: 8,
-    padding: '10px 12px',
-    borderTop: '0.5px solid rgba(0,0,0,0.08)',
-    background: '#fff',
+    padding: '10px 12px 14px',
+    borderTop: '0.5px solid var(--separator-cell)',
+    background: 'var(--bg-secondary)',
   },
   input: {
     flex: 1,
     height: 36,
     borderRadius: 18,
     border: 'none',
-    background: '#F2F2F7',
+    background: 'var(--surface-input)',
     padding: '0 14px',
     fontSize: 14,
     outline: 'none',
+    color: 'var(--text-primary)',
+    fontFamily: 'inherit',
+    userSelect: 'text' as const,
   },
   sendBtn: {
     width: 34,
     height: 34,
     borderRadius: 17,
     border: 'none',
-    background: '#007AFF',
+    background: 'var(--accent)',
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
   },
+  sheetBody: { display: 'flex', flexDirection: 'column', gap: 8 },
+  sheetAction: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    padding: '12px 14px',
+    borderRadius: 12,
+    border: 'none',
+    background: 'var(--bg-tertiary)',
+    cursor: 'pointer',
+    fontSize: 14,
+    fontWeight: 500,
+    color: 'var(--text-primary)',
+    textAlign: 'left' as const,
+  },
+  sheetHint: { fontSize: 11, color: 'var(--text-secondary)', marginTop: 8 },
 };

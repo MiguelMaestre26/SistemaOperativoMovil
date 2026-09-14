@@ -1,70 +1,20 @@
 import React from 'react';
-import { Wifi, Bluetooth, Moon, Bell, Sun, Volume2, Smartphone, Info, Image as ImageIcon, Trash2, Check } from 'lucide-react';
+import {
+  Wifi, Bluetooth, Moon, Bell, Sun, Volume2, Smartphone, Info,
+  Image as ImageIcon, Trash2, Check, Plane, Focus, KeyRound,
+} from 'lucide-react';
 import { useSystemStore } from '../../../stores/useSystemStore';
 import { useMediaStore, isColorUri } from '../../../stores/useMediaStore';
 import { playBlip } from '../../../core/audio';
-
-const Toggle: React.FC<{ enabled: boolean; onChange: (val: boolean) => void }> = ({ enabled, onChange }) => (
-  <div
-    onClick={() => onChange(!enabled)}
-    style={{
-      width: 51,
-      height: 31,
-      borderRadius: 16,
-      background: enabled ? '#34C759' : '#E5E5EA',
-      position: 'relative',
-      cursor: 'pointer',
-      transition: 'background 0.3s',
-      flexShrink: 0,
-    }}
-  >
-    <div
-      style={{
-        width: 27,
-        height: 27,
-        borderRadius: '50%',
-        background: '#fff',
-        position: 'absolute',
-        top: 2,
-        left: enabled ? 22 : 2,
-        transition: 'left 0.3s',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-      }}
-    />
-  </div>
-);
-
-const Slider: React.FC<{ value: number; onChange: (val: number) => void; icon: React.ReactNode; min?: number; max?: number }> = ({
-  value,
-  onChange,
-  icon,
-  min = 0,
-  max = 100,
-}) => (
-  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, maxWidth: 220 }}>
-    <span style={{ color: '#8E8E93', flexShrink: 0 }}>{icon}</span>
-    <input
-      type="range"
-      min={min}
-      max={max}
-      value={value}
-      onChange={(e) => onChange(Number(e.target.value))}
-      style={{
-        width: '100%',
-        accentColor: '#007AFF',
-        height: 4,
-        cursor: 'pointer',
-      }}
-    />
-    <span style={{ fontSize: 13, color: '#8E8E93', minWidth: 28, textAlign: 'right' }}>{value}%</span>
-  </div>
-);
-
-const SectionTitle: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div style={{ fontSize: 13, color: '#8E8E93', textTransform: 'uppercase', padding: '8px 16px 4px', letterSpacing: 0.5 }}>
-    {children}
-  </div>
-);
+import {
+  ALL_FITS, FIT_LABELS, ALL_POSITIONS, POSITION_LABELS,
+  backgroundSizeFor, backgroundPositionFor,
+} from '../../../core/wallpaper';
+import type { WallpaperFit, WallpaperPosition } from '../../../types';
+import {
+  Screen, AppHeader, ListSection, ListGroup, ListRow, Toggle, Slider, ProgressBar, IconButton, SegmentedControl,
+} from '../../ui';
+import ChangePinDialog from './ChangePinDialog';
 
 const Settings: React.FC = () => {
   const {
@@ -81,6 +31,8 @@ const Settings: React.FC = () => {
     totalMemory,
     usedMemory,
     wallpaper,
+    wallpaperFit,
+    wallpaperPosition,
     setAirplaneMode,
     setWifi,
     setBluetooth,
@@ -90,9 +42,14 @@ const Settings: React.FC = () => {
     setDoNotDisturb,
     setFocusMode,
     setWallpaper,
+    setWallpaperFit,
+    setWallpaperPosition,
+    accent,
+    setAccent,
   } = useSystemStore();
 
   const photos = useMediaStore(s => s.photos);
+  const [showPinDialog, setShowPinDialog] = React.useState(false);
 
   const onWifi = (v: boolean) => {
     if (isAirplaneMode) return;
@@ -107,310 +64,410 @@ const Settings: React.FC = () => {
     playBlip(v / 100);
   };
 
-  const containerStyle: React.CSSProperties = {
-    height: '100%',
-    display: 'flex',
-    flexDirection: 'column',
-    background: wallpaper ? `url(${wallpaper})` : '#F2F2F7',
-    backgroundSize: 'cover',
-    backgroundPosition: 'center',
-    overflow: 'auto',
-  };
+  const formatGB = (kb: number) => `${(kb / 1024).toFixed(1)} GB`;
+  const storagePercent = totalStorage > 0 ? usedStorage / totalStorage : 0;
+  const memoryPercent = totalMemory > 0 ? usedMemory / totalMemory : 0;
 
-  const sectionStyle: React.CSSProperties = {
-    background: wallpaper ? 'rgba(255,255,255,0.94)' : '#fff',
-    borderRadius: 10,
-    margin: '0 16px 20px',
-    overflow: 'hidden',
-    minHeight: 200,
-  };
+  const iconTile = (bg: string, node: React.ReactNode) => (
+    <div
+      style={{
+        width: 30,
+        height: 30,
+        borderRadius: 7,
+        background: bg,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: '#fff',
+        flexShrink: 0,
+      }}
+    >
+      {node}
+    </div>
+  );
 
-  const rowStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '12px 16px',
-    borderBottom: '0.5px solid #C6C6C8',
-    minHeight: 44,
-  };
+const ACCENTS = [
+  { id: 'blue', label: 'Azul', color: '#0061A4' },
+  { id: 'purple', label: 'Púrpura', color: '#6750A4' },
+  { id: 'green', label: 'Verde', color: '#006A62' },
+  { id: 'orange', label: 'Naranja', color: '#8F4C00' },
+  { id: 'pink', label: 'Rosa', color: '#9A3350' },
+  { id: 'teal', label: 'Turquesa', color: '#00696E' },
+];
 
-  const lastRowStyle: React.CSSProperties = {
-    ...rowStyle,
-    borderBottom: 'none',
-  };
+const positionAlign: Record<WallpaperPosition, { align: React.CSSProperties['alignItems']; justify: React.CSSProperties['justifyContent'] }> = {
+  'top-left': { align: 'flex-start', justify: 'flex-start' },
+  top: { align: 'flex-start', justify: 'center' },
+  'top-right': { align: 'flex-start', justify: 'flex-end' },
+  left: { align: 'center', justify: 'flex-start' },
+  center: { align: 'center', justify: 'center' },
+  right: { align: 'center', justify: 'flex-end' },
+  'bottom-left': { align: 'flex-end', justify: 'flex-start' },
+  bottom: { align: 'flex-end', justify: 'center' },
+  'bottom-right': { align: 'flex-end', justify: 'flex-end' },
+};
 
-  const labelStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
-    fontSize: 17,
-    color: '#1C1C1E',
-  };
+  const toggle = (checked: boolean, onChange: (v: boolean) => void) => (
+    <Toggle checked={checked} onChange={onChange} />
+  );
 
-  const iconContainerStyle = (bg: string): React.CSSProperties => ({
-    width: 30,
-    height: 30,
-    borderRadius: 7,
-    background: bg,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    color: '#fff',
-  });
-
-  const formatKB = (kb: number) => {
-    const gb = kb / (1024);
-    return `${gb.toFixed(1)} GB`;
-  };
-
-  const storagePercent = totalStorage > 0 ? Math.round((usedStorage / totalStorage) * 100) : 0;
-  const memoryPercent = totalMemory > 0 ? Math.round((usedMemory / totalMemory) * 100) : 0;
+  const sliderCell = (
+    label: string,
+    bg: string,
+    node: React.ReactNode,
+    slider: React.ReactNode,
+  ) => (
+    <div
+      className="cell-row"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 10,
+        padding: '10px 16px',
+        background: 'transparent',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        {iconTile(bg, node)}
+        <span style={{ fontSize: 17, color: 'var(--text-primary)' }}>{label}</span>
+      </div>
+      <div style={{ paddingLeft: 42 }}>{slider}</div>
+      <div className="cell-sep" style={{ marginLeft: 58 }} />
+    </div>
+  );
 
   return (
-    <div style={containerStyle}>
-      <div style={{ padding: '16px 16px 8px', fontSize: 34, fontWeight: 700, color: '#1C1C1E' }}>
-        Settings
-      </div>
+    <Screen>
+      <AppHeader
+        title="Ajustes"
+        right={
+          <IconButton
+            label="Restablecer fondo"
+            bg={wallpaper ? 'rgba(255,59,48,0.14)' : 'var(--bg-tertiary)'}
+            onClick={() => setWallpaper('')}
+          >
+            <Trash2 size={16} color={wallpaper ? 'var(--danger)' : 'var(--text-secondary)'} />
+          </IconButton>
+        }
+      />
 
-<SectionTitle>Connectivity</SectionTitle>
-      <div style={sectionStyle}>
-        <div style={rowStyle}>
-          <div style={labelStyle}>
-            <div style={iconContainerStyle('#FF9500')}>
-              <Smartphone size={16} />
-            </div>
-            Airplane Mode
-          </div>
-          <Toggle enabled={isAirplaneMode} onChange={setAirplaneMode} />
-        </div>
-        <div style={{ ...rowStyle, flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={labelStyle}>
-              <div style={iconContainerStyle('#007AFF')}>
-                <Wifi size={16} />
-              </div>
-              Wi-Fi
-            </div>
-            <Toggle enabled={isWifiOn} onChange={onWifi} />
-          </div>
-          <div style={{ fontSize: 13, color: '#8E8E93', paddingLeft: 42 }}>
-            {isWifiOn ? 'Conectado a Aurora-5G' : 'Apagado'}
-          </div>
-        </div>
-        <div style={{ ...lastRowStyle, flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={labelStyle}>
-              <div style={iconContainerStyle('#007AFF')}>
-                <Bluetooth size={16} />
-              </div>
-              Bluetooth
-            </div>
-            <Toggle enabled={isBluetoothOn} onChange={onBluetooth} />
-          </div>
-          <div style={{ fontSize: 13, color: '#8E8E93', paddingLeft: 42 }}>
-            {isBluetoothOn ? '2 dispositivos conectados' : 'Apagado'}
-          </div>
-        </div>
-      </div>
+      <ListSection title="Conectividad">
+        <ListRow
+          icon={iconTile('#FF9500', <Plane size={15} color="#fff" />)}
+          label="Modo avión"
+          value={toggle(isAirplaneMode, setAirplaneMode)}
+        />
+        <ListRow
+          icon={iconTile('#007AFF', <Wifi size={15} color="#fff" />)}
+          label="Wi-Fi"
+          sublabel={isWifiOn ? 'Conectado a Aurora-5G' : 'Apagado'}
+          value={toggle(isWifiOn, onWifi)}
+        />
+        <ListRow
+          icon={iconTile('#007AFF', <Bluetooth size={15} color="#fff" />)}
+          label="Bluetooth"
+          sublabel={isBluetoothOn ? '2 dispositivos conectados' : 'Apagado'}
+          value={toggle(isBluetoothOn, onBluetooth)}
+        />
+      </ListSection>
 
-      <SectionTitle>Display & Sound</SectionTitle>
-      <div style={sectionStyle}>
-        <div style={{ ...rowStyle, flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
-          <div style={labelStyle}>
-            <div style={iconContainerStyle('#FFCC00')}>
-              <Sun size={16} />
-            </div>
-            Brightness
-          </div>
-          <Slider value={brightness} onChange={setBrightness} icon={<Sun size={14} color="#FFCC00" />} />
-        </div>
-        <div style={{ ...lastRowStyle, flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
-          <div style={labelStyle}>
-            <div style={iconContainerStyle('#5856D6')}>
-              <Volume2 size={16} />
-            </div>
-            Volume
-          </div>
-          <Slider value={volume} onChange={onVolume} icon={<Volume2 size={14} color="#5856D6" />} />
-        </div>
-      </div>
-
-      <SectionTitle>Modes</SectionTitle>
-      <div style={sectionStyle}>
-        <div style={rowStyle}>
-          <div style={labelStyle}>
-            <div style={iconContainerStyle('#5856D6')}>
-              <Moon size={16} />
-            </div>
-            Dark Mode
-          </div>
-          <Toggle enabled={isDarkMode} onChange={setDarkMode} />
-        </div>
-        <div style={{ flexDirection: 'column', alignItems: 'stretch' }}>
-          <div style={rowStyle}>
-            <div style={labelStyle}>
-              <div style={iconContainerStyle('#FF2D55')}>
-                <Bell size={16} />
-              </div>
-              Do Not Disturb
-            </div>
-            <Toggle enabled={isDoNotDisturb} onChange={setDoNotDisturb} />
-          </div>
-          {isDoNotDisturb && (
-            <div style={{ padding: '6px 16px 10px', fontSize: 13, color: '#8E8E93', borderTop: '0.5px solid #C6C6C8' }}>
-              Las notificaciones se silencian y se guardan en el Centro de Notificaciones.
-            </div>
+      <ListSection title="Pantalla y sonido">
+        <ListGroup>
+          {sliderCell(
+            'Brillo',
+            '#FFCC00',
+            <Sun size={15} color="#fff" />,
+            <Slider value={brightness} onChange={setBrightness} />,
           )}
-        </div>
-        <div style={{ ...lastRowStyle, flexDirection: 'column', alignItems: 'stretch' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={labelStyle}>
-              <div style={iconContainerStyle('#30B0C7')}>
-                <Moon size={16} />
-              </div>
-              Focus Mode
-            </div>
-            <Toggle enabled={isFocusMode} onChange={setFocusMode} />
-          </div>
-          {isFocusMode && (
-            <div style={{ padding: '6px 16px 10px', fontSize: 13, color: '#8E8E93', borderTop: '0.5px solid #C6C6C8' }}>
-              Se reducen notificaciones y distractions mientras el modo está activo.
-            </div>
+          {sliderCell(
+            'Volumen',
+            '#5856D6',
+            <Volume2 size={15} color="#fff" />,
+            <Slider value={volume} onChange={onVolume} />,
           )}
-        </div>
-      </div>
+        </ListGroup>
+      </ListSection>
 
-      <SectionTitle>Wallpaper</SectionTitle>
-      <div style={sectionStyle}>
-        <div style={{ padding: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-            <span style={labelStyle}>
-              <div style={iconContainerStyle('#5856D6')}>
-                <ImageIcon size={16} />
+      <ListSection title="Modos">
+        <ListRow
+          icon={iconTile('#5856D6', <Moon size={15} color="#fff" />)}
+          label="Modo oscuro"
+          sublabel={isDarkMode ? 'Activado' : 'Desactivado'}
+          value={toggle(isDarkMode, setDarkMode)}
+        />
+        <ListRow
+          icon={iconTile('#FF2D55', <Bell size={15} color="#fff" />)}
+          label="No molestar"
+          sublabel={isDoNotDisturb ? 'Activo' : undefined}
+          value={toggle(isDoNotDisturb, setDoNotDisturb)}
+        />
+        <ListRow
+          icon={iconTile('#30B0C7', <Focus size={15} color="#fff" />)}
+          label="Modo enfoque"
+          sublabel={isFocusMode ? 'Activo' : undefined}
+          value={toggle(isFocusMode, setFocusMode)}
+        />
+      </ListSection>
+
+      <ListSection title="Fondo de pantalla">
+        <ListGroup>
+          <div
+            className="cell-row"
+            style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: 14, background: 'transparent' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                {iconTile('#5856D6', <ImageIcon size={15} color="#fff" />)}
+                <span style={{ fontSize: 17, color: 'var(--text-primary)' }}>Fondo de pantalla</span>
               </div>
-              Fondo de pantalla
-            </span>
-            <button
-              onClick={() => setWallpaper('')}
+              <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                {wallpaper ? 'Personalizado' : 'Aurora'}
+              </span>
+            </div>
+
+            <div
               style={{
-                display: 'flex', alignItems: 'center', gap: 6, border: 'none',
-                background: wallpaper ? 'rgba(255,59,48,0.12)' : 'rgba(0,0,0,0.06)',
-                color: wallpaper ? '#FF3B30' : '#8E8E93', borderRadius: 12,
-                padding: '7px 12px', fontSize: 13, fontWeight: 600,
-                cursor: 'pointer',
-                flexShrink: 0,
+                height: 90,
+                borderRadius: 12,
+                backgroundImage: wallpaper
+                  ? `url(${wallpaper})`
+                  : 'linear-gradient(135deg, #7C6FF0 0%, #A78BFA 50%, #60A5FA 100%)',
+                backgroundSize: wallpaper ? backgroundSizeFor(wallpaperFit) : 'cover',
+                backgroundPosition: wallpaper ? backgroundPositionFor(wallpaperPosition) : 'center',
+                overflow: 'hidden',
+                position: 'relative' as const,
               }}
             >
-              <Trash2 size={14} /> Quitar fondo
-            </button>
-          </div>
+              <div
+                style={{
+                  position: 'absolute',
+                  bottom: 6,
+                  left: 10,
+                  color: '#fff',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  textShadow: '0 1px 4px rgba(0,0,0,0.6)',
+                }}
+              >
+                {wallpaper ? 'Fondo personalizado' : 'Fondo Aurora (predeterminado)'}
+              </div>
+            </div>
 
+            {photos.length > 0 && (
+              <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2 }}>
+                {photos.map(p => {
+                  const selected = wallpaper === p.uri;
+                  return (
+                    <button
+                      key={p.id}
+                      className="pressable"
+                      onClick={() => setWallpaper(p.uri)}
+                      aria-label={p.caption}
+                      style={{
+                        width: 68,
+                        height: 68,
+                        borderRadius: 10,
+                        border: selected ? '2px solid var(--accent)' : '2px solid transparent',
+                        padding: 0,
+                        cursor: 'pointer',
+                        background: isColorUri(p.uri) ? p.uri : 'var(--bg-tertiary)',
+                        overflow: 'hidden',
+                        position: 'relative' as const,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {!isColorUri(p.uri) && (
+                        <img
+                          src={p.uri}
+                          alt={p.caption}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                      )}
+                      {selected && (
+                        <span
+                          style={{
+                            position: 'absolute',
+                            bottom: 2,
+                            right: 2,
+                            width: 18,
+                            height: 18,
+                            borderRadius: 9,
+                            background: 'var(--accent)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#fff',
+                          }}
+                        >
+                          <Check size={12} />
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {photos.length === 0 && (
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                No hay imágenes. Descarga una o captura una foto con la Cámara.
+              </div>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>Ajuste</span>
+                <SegmentedControl
+                  name="wallpaper-fit"
+                  value={wallpaperFit}
+                  onChange={(v) => setWallpaperFit(v as WallpaperFit)}
+                  options={ALL_FITS.map(f => ({ value: f, label: FIT_LABELS[f] }))}
+                />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>Posición</span>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(3, 1fr)',
+                    gap: 6,
+                    alignSelf: 'center',
+                    width: 'min(100%, 180px)',
+                  }}
+                >
+                  {ALL_POSITIONS.map(pos => {
+                    const active = wallpaperPosition === pos;
+                    return (
+                      <button
+                        key={pos}
+                        className="pressable"
+                        onClick={() => setWallpaperPosition(pos)}
+                        aria-label={POSITION_LABELS[pos]}
+                        title={POSITION_LABELS[pos]}
+                        style={{
+                          height: 40,
+                          borderRadius: 8,
+                          border: active ? '1.5px solid var(--accent)' : '1px solid var(--outline-variant)',
+                          background: active ? 'color-mix(in srgb, var(--accent) 14%, transparent)' : 'transparent',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: positionAlign[pos].align,
+                          justifyContent: positionAlign[pos].justify,
+                          padding: 10,
+                        }}
+                      >
+                        <span
+                          style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: '50%',
+                            background: active ? 'var(--accent)' : 'var(--outline)',
+                          }}
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="cell-sep" style={{ marginLeft: 16 }} />
+          </div>
+        </ListGroup>
+      </ListSection>
+
+      <ListSection title="Color de acento">
+        <ListGroup>
           <div
+            className="cell-row"
             style={{
-              height: 90,
-              borderRadius: 10,
-              marginTop: 10,
-              backgroundImage: wallpaper ? `url(${wallpaper})` : 'linear-gradient(135deg, #7C6FF0 0%, #A78BFA 50%, #60A5FA 100%)',
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-              overflow: 'hidden',
-              position: 'relative',
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 10,
+              padding: '12px 16px',
+              background: 'transparent',
             }}
           >
-            <div style={{ position: 'absolute', bottom: 6, left: 10, color: '#fff', fontSize: 11, fontWeight: 600, textShadow: '0 1px 4px rgba(0,0,0,0.6)' }}>
-              {wallpaper ? 'Fondo personalizado' : 'Fondo Aurora (predeterminado)'}
-            </div>
+            {ACCENTS.map(a => (
+              <button
+                key={a.id}
+                className="pressable"
+                onClick={() => setAccent(a.id)}
+                aria-label={a.label}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  border: accent === a.id ? '2px solid var(--primary)' : '2px solid var(--outline-variant)',
+                  borderRadius: 999,
+                  padding: '5px 14px 5px 6px',
+                  background: 'transparent',
+                  cursor: 'pointer',
+                }}
+              >
+                <span style={{ width: 22, height: 22, borderRadius: '50%', background: a.color, display: 'inline-flex', flexShrink: 0 }} />
+                <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{a.label}</span>
+              </button>
+            ))}
           </div>
+        </ListGroup>
+      </ListSection>
 
-          {photos.length > 0 && (
-            <div style={{ display: 'flex', gap: 8, marginTop: 10, overflowX: 'auto', paddingBottom: 2 }}>
-              {photos.map(p => {
-                const selected = wallpaper === p.uri;
-                return (
-                  <button
-                    key={p.id}
-                    onClick={() => setWallpaper(p.uri)}
-                    title={p.caption}
-                    style={{
-                      width: 68,
-                      height: 68,
-                      borderRadius: 8,
-                      border: selected ? '2px solid #007AFF' : '2px solid transparent',
-                      padding: 0,
-                      cursor: 'pointer',
-                      background: isColorUri(p.uri) ? p.uri : '#E5E5EA',
-                      overflow: 'hidden',
-                      position: 'relative',
-                      flexShrink: 0,
-                    }}
-                  >
-                    {!isColorUri(p.uri) && (
-                      <img src={p.uri} alt={p.caption} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    )}
-                    {selected && (
-                      <span style={{
-                        position: 'absolute', bottom: 2, right: 2, width: 18, height: 18,
-                        borderRadius: 9, background: '#007AFF', display: 'flex',
-                        alignItems: 'center', justifyContent: 'center',
-                        color: '#fff',
-                      }}>
-                        <Check size={12} />
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-          {photos.length === 0 && (
-            <div style={{ marginTop: 10, fontSize: 13, color: '#8E8E93' }}>
-              No hay imágenes. Descarga una o captura una foto con la Cámara.
-            </div>
-          )}
+      <ListSection title="Seguridad">
+        <ListRow
+          icon={iconTile('#30D158', <KeyRound size={15} color="#fff" />)}
+          label="Contraseña"
+          sublabel="Cambiar contraseña de desbloqueo"
+          onClick={() => setShowPinDialog(true)}
+        />
+      </ListSection>
+
+      <ListSection title="Acerca de">
+        <ListRow
+          icon={iconTile('#8E8E93', <Info size={15} color="#fff" />)}
+          label="Nombre del dispositivo"
+          value="AuroraOS"
+        />
+        <ListRow
+          icon={iconTile('#007AFF', <Smartphone size={15} color="#fff" />)}
+          label="Almacenamiento"
+          sublabel={`${storagePercent * 100}% en uso`}
+          value={formatGB(usedStorage)}
+          showSeparator={false}
+        />
+      </ListSection>
+
+      <div
+        style={{
+          margin: '0 16px',
+          padding: '12px 16px',
+          background: 'var(--surface-card)',
+          borderRadius: 14,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 12,
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 15, color: 'var(--text-primary)' }}>
+            {formatGB(usedStorage)} / {formatGB(totalStorage)}
+          </span>
+          <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Almacenamiento</span>
         </div>
+        <ProgressBar value={storagePercent} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 15, color: 'var(--text-primary)' }}>
+            {formatGB(usedMemory)} / {formatGB(totalMemory)}
+          </span>
+          <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Memoria</span>
+        </div>
+        <ProgressBar value={memoryPercent} color="var(--success)" />
       </div>
 
-      <SectionTitle>About</SectionTitle>
-      <div style={sectionStyle}>
-        <div style={rowStyle}>
-          <div style={labelStyle}>
-            <div style={iconContainerStyle('#8E8E93')}>
-              <Info size={16} />
-            </div>
-            Device Name
-          </div>
-          <span style={{ color: '#8E8E93', fontSize: 17 }}>AuroraOS</span>
-        </div>
-        <div style={rowStyle}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#1C1C1E', fontSize: 15 }}>Storage</span>
-              <span style={{ color: '#8E8E93', fontSize: 15 }}>
-                {formatKB(usedStorage)} / {formatKB(totalStorage)}
-              </span>
-            </div>
-            <div style={{ width: '100%', height: 6, background: '#E5E5EA', borderRadius: 3, overflow: 'hidden' }}>
-              <div style={{ width: `${storagePercent}%`, height: '100%', background: '#007AFF', borderRadius: 3 }} />
-            </div>
-          </div>
-        </div>
-        <div style={lastRowStyle}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#1C1C1E', fontSize: 15 }}>Memory</span>
-              <span style={{ color: '#8E8E93', fontSize: 15 }}>
-                {formatKB(usedMemory)} / {formatKB(totalMemory)}
-              </span>
-            </div>
-            <div style={{ width: '100%', height: 6, background: '#E5E5EA', borderRadius: 3, overflow: 'hidden' }}>
-              <div style={{ width: `${memoryPercent}%`, height: '100%', background: '#34C759', borderRadius: 3 }} />
-            </div>
-          </div>
-        </div>
-      </div>
+      <div style={{ height: 24 }} />
 
-      <div style={{ height: 32 }} />
-    </div>
+      {showPinDialog && <ChangePinDialog onClose={() => setShowPinDialog(false)} />}
+    </Screen>
   );
 };
 

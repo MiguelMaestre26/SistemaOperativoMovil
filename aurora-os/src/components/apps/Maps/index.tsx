@@ -1,256 +1,416 @@
-import { useState, useRef, useEffect } from 'react';
-import { Search, Navigation, X, List, MapPin, LocateFixed } from 'lucide-react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import L, { type Map } from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import { Search, X, Navigation, LocateFixed, MapPin, ArrowLeft, RotateCw, Home } from 'lucide-react';
+import { usePersistedState } from '../../../core/persistence';
+import { isNative } from '../../../core/native';
+import RealWebView, { type RealWebViewHandle } from '../../shared/RealWebView';
 
-interface Place {
-  id: string;
-  name: string;
-  category: string;
-  x: number;
-  y: number;
-  emoji: string;
+interface SearchResult {
+  placeId: number;
+  displayName: string;
+  lat: number;
+  lng: number;
+  type: string;
 }
 
-const PLACES: Place[] = [
-  { id: 'p1', name: 'Parque Central', category: 'Parque', x: 180, y: 150, emoji: '🌳' },
-  { id: 'p2', name: 'Museo Nacional', category: 'Museo', x: 240, y: 200, emoji: '🏛️' },
-  { id: 'p3', name: 'Teatro Nacional', category: 'Teatro', x: 200, y: 120, emoji: '🎭' },
-  { id: 'p4', name: 'Estadio Nacional', category: 'Deporte', x: 90, y: 320, emoji: '⚽' },
-  { id: 'p5', name: 'La Sabana', category: 'Parque', x: 120, y: 80, emoji: '🌲' },
-  { id: 'p6', name: 'Mall San Pedro', category: 'Compras', x: 280, y: 90, emoji: '🛍️' },
-  { id: 'p7', name: 'Hospital Calderón', category: 'Salud', x: 70, y: 220, emoji: '🏥' },
-  { id: 'p8', name: 'UCR Campus', category: 'Educación', x: 300, y: 300, emoji: '🎓' },
-];
+const UJAP = { lat: 10.2368, lng: -67.9619 };
 
-const USER_START = { x: 160, y: 250 };
+// Google Maps
+const GM_LANG = 'hl=es';
+const GMAPS_DEFAULT =
+  'https://www.google.com/maps/@10.2367632,-67.9638933,15z?entry=ttu&g_ep=EgoyMDI2MDkwOS4wIKXMDSoASAFQAw%3D%3D';
+const gmapsSearchUrl = (q: string) =>
+  `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}&${GM_LANG}`;
 
-const ROADS: Array<[number, number, number, number]> = [
-  [60, 120, 300, 120], [40, 200, 320, 200], [80, 280, 300, 280],
-  [100, 60, 100, 360], [180, 40, 180, 360], [260, 60, 260, 360],
-  [320, 160, 200, 360], [60, 40, 60, 360],
-];
-
-function stepCount(dx: number, dy: number): number {
-  return Math.max(8, Math.round(Math.abs(dx) / 6 + Math.abs(dy) / 6));
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-export default function MapsApp() {
+async function geocodeAddress(q: string): Promise<SearchResult[]> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  try {
+    const params = new URLSearchParams({ q, format: 'json', limit: '8', addressdetails: '1' });
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
+      signal: controller.signal,
+      headers: { Accept: 'application/json' },
+    });
+    if (!res.ok) throw new Error('geocode failed');
+    const data: unknown = await res.json();
+    if (!Array.isArray(data)) throw new Error('bad data');
+    return data.map((r: Record<string, unknown>) => ({
+      placeId: Number(r.place_id),
+      displayName: String(r.display_name ?? ''),
+      lat: Number(r.lat),
+      lng: Number(r.lon),
+      type: String(r.type ?? ''),
+    }));
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function NativeMaps() {
+  const wvRef = useRef<RealWebViewHandle>(null);
+  const [src, setSrc] = usePersistedState<string>('maps:gm:v4', GMAPS_DEFAULT);
   const [query, setQuery] = useState('');
-  const [selected, setSelected] = useState<Place | null>(null);
-  const [navigating, setNavigating] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [position, setPosition] = useState(USER_START);
-  const routeRef = useRef<SVGPathElement | null>(null);
-  const rafRef = useRef<number>(0);
+  const [status, setStatus] = useState<string | null>(null);
+  const statusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const matches = PLACES.filter(p =>
-    p.name.toLowerCase().includes(query.toLowerCase()) ||
-    p.category.toLowerCase().includes(query.toLowerCase()),
-  );
-
-  const startNav = (place: Place) => {
-    setSelected(place);
-    setNavigating(true);
-    setProgress(0);
+  const flashStatus = (msg: string) => {
+    setStatus(msg);
+    if (statusTimer.current) clearTimeout(statusTimer.current);
+    statusTimer.current = setTimeout(() => setStatus(null), 3000);
   };
 
-  useEffect(() => {
-    if (!navigating || !selected) return;
-    const start = progress === 0 ? USER_START : position;
-    const dx = selected.x - start.x;
-    const dy = selected.y - start.y;
-    const steps = stepCount(dx, dy);
-    const per = 1 / steps;
-    let t = 0;
-    const tick = () => {
-      t += per;
-      const k = Math.min(1, t);
-      setPosition({ x: USER_START.x + (selected.x - USER_START.x) * k, y: USER_START.y + (selected.y - USER_START.y) * k });
-      setProgress(k);
-      if (k < 1) {
-        rafRef.current = requestAnimationFrame(tick);
-      } else {
-        setNavigating(false);
-      }
-    };
-    rafRef.current = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafRef.current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [navigating]);
+  const navigate = useCallback(
+    (next: string) => {
+      setQuery('');
+      setSrc(next);
+    },
+    [setSrc],
+  );
 
-  const distance = selected ? Math.round(Math.hypot(selected.x - USER_START.x, selected.y - USER_START.y) / 8) : 0;
-  const eta = selected ? Math.max(2, Math.round(distance / 5)) : 0;
+  const runSearch = (q: string) => {
+    if (!q.trim()) return;
+    navigate(gmapsSearchUrl(q.trim()));
+  };
+
+  const goHome = () => navigate(GMAPS_DEFAULT);
+
+  const locate = () => {
+    if (!navigator.geolocation) {
+      flashStatus('Geolocalización no disponible');
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      pos => navigate(gmapsSearchUrl(`${pos.coords.latitude},${pos.coords.longitude}`)),
+      () => flashStatus('No se pudo obtener tu ubicación'),
+      { enableHighAccuracy: true, timeout: 8000 },
+    );
+  };
+
+  const keepUrl = useCallback(
+    (u: string) => {
+      if (u && /maps/i.test(u)) setSrc(u);
+    },
+    [setSrc],
+  );
 
   return (
     <div style={styles.container}>
-      <svg viewBox="0 0 360 500" style={styles.map} preserveAspectRatio="xMidYMid slice">
-        <rect width="360" height="500" fill="#E8EDF2" />
-        <path
-          d="M0,420 Q90,380 180,430 T360,400 L360,500 L0,500 Z"
-          fill="#BBD9F2"
-        />
-        <ellipse cx="180" cy="150" rx="46" ry="60" fill="#CFE8C6" />
-        <ellipse cx="120" cy="80" rx="70" ry="46" fill="#CBE2BE" />
-        <rect x="220" y="240" width="56" height="40" rx="4" fill="#E3DAC9" />
-        {ROADS.map((r, i) => (
-          <line key={i} x1={r[0]} y1={r[1]} x2={r[2]} y2={r[3]} stroke="#fff" strokeWidth="9" strokeLinecap="round" />
-        ))}
-        {ROADS.map((r, i) => (
-          <line key={`c${i}`} x1={r[0]} y1={r[1]} x2={r[2]} y2={r[3]} stroke="#F8F9FB" strokeWidth="2.5" strokeDasharray="7 7" strokeLinecap="round" />
-        ))}
-
-        {navigating && selected && (
-          <path
-            ref={routeRef}
-            d={`M${USER_START.x},${USER_START.y} L${selected.x},${selected.y}`}
-            stroke="#007AFF"
-            strokeWidth="5"
-            strokeLinecap="round"
-            strokeDasharray="10 8"
-            fill="none"
-            opacity="0.9"
-          />
-        )}
-
-        {PLACES.map(p => (
-          <g key={p.id} onClick={() => setSelected(p)} style={{ cursor: 'pointer' }}>
-            <circle cx={p.x} cy={p.y} r="7" fill="#fff" stroke="#007AFF" strokeWidth="2.5" />
-            <text
-              x={p.x}
-              y={p.y - 12}
-              fontSize="16"
-              textAnchor="middle"
-              style={{ pointerEvents: 'none' }}
-            >
-              {p.emoji}
-            </text>
-          </g>
-        ))}
-
-        <g key={JSON.stringify(position)}>
-          <circle cx={position.x} cy={position.y} r="12" fill="#007AFF" stroke="#fff" strokeWidth="3" />
-          <circle cx={position.x} cy={position.y} r="20" fill="rgba(0,122,255,0.25)" />
-        </g>
-      </svg>
+      <RealWebView
+        ref={wvRef}
+        src={src}
+        partition="aurora-maps-google"
+        onUrl={keepUrl}
+      />
 
       <div style={styles.searchBox}>
-        <Search size={16} color="#8E8E93" />
+        <Search size={16} color="var(--text-secondary)" />
         <input
           value={query}
           onChange={e => setQuery(e.target.value)}
-          placeholder="Buscar lugares en San José…"
+          onKeyDown={e => {
+            if (e.key === 'Enter') runSearch(query);
+          }}
+          placeholder="Buscar dirección o lugar en Google Maps…"
           style={styles.searchInput}
         />
         {query && (
-          <button style={styles.clearBtn} onClick={() => setQuery('')} aria-label="Limpiar">
-            <X size={14} color="#8E8E93" />
+          <button className="pressable" style={styles.clearBtn} onClick={() => setQuery('')} aria-label="Limpiar">
+            <X size={14} color="var(--text-secondary)" />
           </button>
         )}
+        <button className="pressable" style={styles.searchBtn} onClick={() => runSearch(query)} aria-label="Buscar">
+          Buscar
+        </button>
       </div>
 
-      {query && (
+      <div style={styles.ctrlCol}>
+        <button className="pressable" style={styles.ctrlBtn} onClick={() => wvRef.current?.goBack()} aria-label="Atrás">
+          <ArrowLeft size={15} color="#fff" />
+        </button>
+        <button className="pressable" style={styles.ctrlBtn} onClick={() => wvRef.current?.reload()} aria-label="Recargar">
+          <RotateCw size={15} color="#fff" />
+        </button>
+        <button className="pressable" style={styles.ctrlBtn} onClick={goHome} aria-label="Universidad José Antonio Páez">
+          <Home size={15} color="#fff" />
+        </button>
+      </div>
+
+      <button className="pressable" style={styles.gps} onClick={locate} aria-label="Mi ubicación">
+        <LocateFixed size={18} color="#fff" />
+      </button>
+
+      {status && <div style={styles.status}>{status}</div>}
+    </div>
+  );
+}
+
+function LeafletMaps() {
+  const mapElRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<Map | null>(null);
+  const markersRef = useRef<L.LayerGroup | null>(null);
+  const userMarkerRef = useRef<L.CircleMarker | null>(null);
+
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [selected, setSelected] = useState<SearchResult | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
+  const [center, setCenter] = usePersistedState<{ lat: number; lng: number; zoom: number }>('maps:view:v2', {
+    lat: UJAP.lat,
+    lng: UJAP.lng,
+    zoom: 14,
+  });
+
+  useEffect(() => {
+    if (!mapElRef.current || mapRef.current) return;
+    const map = L.map(mapElRef.current, {
+      center: [center.lat, center.lng],
+      zoom: center.zoom,
+      zoomControl: false,
+      attributionControl: true,
+    });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      maxZoom: 19,
+    }).addTo(map);
+    const fixSize = () => map.invalidateSize();
+    const t = setTimeout(fixSize, 400);
+    const ro = typeof ResizeObserver !== 'undefined' && mapElRef.current
+      ? new ResizeObserver(() => fixSize())
+      : null;
+    if (ro && mapElRef.current) ro.observe(mapElRef.current);
+    map.on('moveend', () => {
+      const c = map.getCenter();
+      setCenter({ lat: c.lat, lng: c.lng, zoom: map.getZoom() });
+    });
+    markersRef.current = L.layerGroup().addTo(map);
+    mapRef.current = map;
+    return () => {
+      clearTimeout(t);
+      ro?.disconnect();
+      map.remove();
+      mapRef.current = null;
+      markersRef.current = null;
+      userMarkerRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const placeUserMarker = useCallback((ll: L.LatLngExpression) => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (userMarkerRef.current) userMarkerRef.current.remove();
+    const m = L.circleMarker(ll, {
+      radius: 9,
+      color: '#fff',
+      weight: 3,
+      fillColor: 'var(--primary)',
+      fillOpacity: 1,
+    }).addTo(map);
+    m.bindPopup('<b>Tu ubicación</b>').openPopup();
+    userMarkerRef.current = m;
+  }, []);
+
+  const locate = useCallback(() => {
+    if (!navigator.geolocation || !mapRef.current) {
+      setStatus('Geolocalización no disponible');
+      return;
+    }
+    setStatus(null);
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const ll: L.LatLngExpression = [pos.coords.latitude, pos.coords.longitude];
+        mapRef.current?.setView(ll, 15);
+        placeUserMarker(ll);
+      },
+      () => setStatus('No se pudo obtener tu ubicación'),
+      { enableHighAccuracy: true, timeout: 8000 },
+    );
+  }, [placeUserMarker]);
+
+  const runSearch = async (q: string) => {
+    if (!q) {
+      setResults([]);
+      return;
+    }
+    setSearching(true);
+    setStatus(null);
+    try {
+      const res = await geocodeAddress(q);
+      setResults(res);
+      if (res.length === 0) {
+        setStatus('Sin resultados para esa búsqueda');
+        return;
+      }
+      markersRef.current?.clearLayers();
+      const bounds: [number, number][] = [];
+      for (const r of res) {
+        const ll: L.LatLngExpression = [r.lat, r.lng];
+        bounds.push([r.lat, r.lng]);
+        const m = L.circleMarker(ll, {
+          radius: 7,
+          color: '#fff',
+          weight: 2,
+          fillColor: '#FF3B30',
+          fillOpacity: 1,
+        });
+        m.bindPopup(`<b>${escapeHtml(r.displayName.split(',')[0] ?? r.displayName)}</b><br/>${escapeHtml(r.displayName)}`);
+        m.on('click', () => setSelected(r));
+        m.addTo(markersRef.current!);
+      }
+      mapRef.current?.fitBounds(L.latLngBounds(bounds), { padding: [30, 30], maxZoom: 15 });
+    } catch {
+      setStatus('Error al buscar (verifica tu conexión)');
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  return (
+    <div style={styles.container}>
+      <div ref={mapElRef} style={styles.map} />
+
+      <div style={styles.searchBox}>
+        <Search size={16} color="var(--text-secondary)" />
+        <input
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter') void runSearch(query.trim());
+          }}
+          placeholder="Buscar dirección o lugar…"
+          style={styles.searchInput}
+        />
+        {query && (
+          <button className="pressable" style={styles.clearBtn} onClick={() => setQuery('')} aria-label="Limpiar">
+            <X size={14} color="var(--text-secondary)" />
+          </button>
+        )}
+        <button className="pressable" style={styles.searchBtn} onClick={() => void runSearch(query.trim())} aria-label="Buscar">
+          {searching ? '…' : 'Buscar'}
+        </button>
+      </div>
+
+      {results.length > 0 && (
         <div style={styles.results}>
-          {matches.length === 0 && <div style={styles.noRes}>Sin resultados</div>}
-          {matches.map(p => (
-            <button key={p.id} style={styles.result} onClick={() => { setSelected(p); setQuery(''); }}>
-              <span style={styles.resultEmoji}>{p.emoji}</span>
+          {results.map(r => (
+            <button
+              key={r.placeId}
+              className="pressable"
+              style={styles.result}
+              onClick={() => {
+                setSelected(r);
+                setResults([]);
+                setQuery('');
+                mapRef.current?.setView([r.lat, r.lng], 16);
+              }}
+            >
+              <span style={styles.resultEmoji}><MapPin size={15} color="#FF3B30" /></span>
               <span style={styles.resultMain}>
-                <span style={styles.resultName}>{p.name}</span>
-                <span style={styles.resultCat}>{p.category}</span>
+                <span style={styles.resultName}>{r.displayName.split(',')[0]}</span>
+                <span style={styles.resultCat}>{r.displayName}</span>
               </span>
-              <MapPin size={15} color="#007AFF" />
             </button>
           ))}
         </div>
       )}
 
-      <button
-        style={styles.gps}
-        onClick={() => { setSelected(null); setNavigating(false); }}
-        aria-label="Centrar mapa"
-      >
+      {status && <div style={styles.status}>{status}</div>}
+
+      <button className="pressable" style={styles.gps} onClick={locate} aria-label="Mi ubicación">
         <LocateFixed size={18} color="#fff" />
       </button>
 
       {selected && (
         <div style={styles.card}>
           <div style={styles.cardTop}>
-            <span style={styles.cardEmoji}>{selected.emoji}</span>
+            <span style={styles.cardPin}><MapPin size={16} color="var(--accent)" /></span>
             <div style={styles.cardMain}>
-              <div style={styles.cardName}>{selected.name}</div>
-              <div style={styles.cardCat}>{selected.category} · Centro San José</div>
+              <div style={styles.cardName}>{selected.displayName.split(',')[0]}</div>
+              <div style={styles.cardCat}>{selected.displayName} · {selected.type}</div>
             </div>
-            <button style={styles.cardClose} onClick={() => setSelected(null)} aria-label="Cerrar">
-              <X size={16} color="#8E8E93" />
+            <button className="pressable" style={styles.cardClose} onClick={() => setSelected(null)} aria-label="Cerrar">
+              <X size={16} color="var(--text-secondary)" />
             </button>
           </div>
-          {navigating ? (
-            <div style={styles.navRow}>
-              <div style={styles.navInfo}>
-                <div style={styles.navBig}>{eta} min</div>
-                <div style={styles.navSmall}>{distance} m</div>
-              </div>
-              <div style={styles.navBar}>
-                <div style={{ ...styles.navFill, width: `${progress * 100}%` }} />
-              </div>
-            </div>
-          ) : (
-            <button style={styles.navBtn} onClick={() => startNav(selected)}>
-              <Navigation size={16} color="#fff" /> Cómo llegar
-            </button>
-          )}
-        </div>
-      )}
-
-      {navigating && selected && (
-        <div style={styles.steps}>
-          <List size={14} color="#8E8E93" />
-          <span style={{ fontSize: 13, color: '#111' }}>
-            {progress < 0.5 ? 'Continúa por Avenida Central hasta ' : 'Ya casi llegas a '}
-            <b>{selected.name}</b> ({Math.round((1 - progress) * 100)}%)
-          </span>
+          <button
+            className="pressable"
+            style={styles.navBtn}
+            onClick={() => window.open(`https://www.openstreetmap.org/?mlat=${selected.lat}&mlon=${selected.lng}#map=16/${selected.lat}/${selected.lng}`, '_blank', 'noopener')}
+          >
+            <Navigation size={16} color="#fff" /> Abrir en OpenStreetMap
+          </button>
         </div>
       )}
     </div>
   );
 }
 
+export default function MapsApp() {
+  if (isNative()) return <NativeMaps />;
+  return <LeafletMaps />;
+}
+
 const styles: Record<string, React.CSSProperties> = {
-  container: { height: '100%', position: 'relative', background: '#E8EDF2', overflow: 'hidden' },
+  container: { height: '100%', position: 'relative', overflow: 'hidden' },
   map: { width: '100%', height: '100%' },
   searchBox: {
     position: 'absolute',
     top: 12,
     left: 12,
-    right: 12,
-    height: 38,
-    borderRadius: 19,
-    background: '#fff',
-    boxShadow: '0 2px 10px rgba(0,0,0,0.12)',
+    right: 124,
+    height: 40,
+    borderRadius: 20,
+    background: 'var(--glass)',
+    backdropFilter: 'blur(20px)',
+    WebkitBackdropFilter: 'blur(20px)',
+    border: '1px solid var(--glass-border)',
+    boxShadow: '0 2px 10px rgba(0,0,0,0.15)',
     display: 'flex',
     alignItems: 'center',
     gap: 8,
-    padding: '0 14px',
-    zIndex: 30,
+    padding: '0 8px 0 14px',
+    zIndex: 500,
   },
   searchInput: {
     flex: 1,
     border: 'none',
     outline: 'none',
     fontSize: 14,
-    color: '#111',
+    color: 'var(--text-primary)',
     background: 'none',
+    minWidth: 0,
+    fontFamily: 'inherit',
+    userSelect: 'text' as const,
   },
   clearBtn: { border: 'none', background: 'none', cursor: 'pointer' },
+  searchBtn: {
+    border: 'none',
+    background: 'var(--accent)',
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: 600,
+    padding: '8px 14px',
+    borderRadius: 16,
+    cursor: 'pointer',
+    flexShrink: 0,
+  },
   results: {
     position: 'absolute',
     top: 58,
     left: 12,
     right: 12,
-    background: '#fff',
+    maxHeight: 260,
+    overflowY: 'auto',
+    background: 'var(--surface-card)',
     borderRadius: 14,
-    boxShadow: '0 4px 18px rgba(0,0,0,0.12)',
-    zIndex: 30,
-    overflow: 'hidden',
+    boxShadow: '0 4px 18px rgba(0,0,0,0.15)',
+    zIndex: 500,
   },
   result: {
     display: 'flex',
@@ -259,51 +419,98 @@ const styles: Record<string, React.CSSProperties> = {
     width: '100%',
     border: 'none',
     background: 'none',
-    padding: '12px 14px',
+    padding: '11px 14px',
     cursor: 'pointer',
-    borderBottom: '0.5px solid rgba(0,0,0,0.05)',
+    borderBottom: '0.5px solid var(--separator-cell)',
     textAlign: 'left' as const,
   },
-  resultEmoji: { fontSize: 18 },
+  resultEmoji: { flexShrink: 0 },
   resultMain: { flex: 1, minWidth: 0 },
-  resultName: { display: 'block', fontSize: 14, fontWeight: 600, color: '#111' },
-  resultCat: { fontSize: 12, color: '#8E8E93', marginTop: 1 },
-  noRes: { padding: '14px', fontSize: 13, color: '#C7C7CC', textAlign: 'center' as const },
-  gps: {
+  resultName: { display: 'block', fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' },
+  resultCat: {
+    fontSize: 11,
+    color: 'var(--text-secondary)',
+    marginTop: 1,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap' as const,
+  },
+  status: {
     position: 'absolute',
-    bottom: 130,
+    top: 58,
+    left: 12,
+    right: 12,
+    background: 'rgba(0,0,0,0.8)',
+    color: '#fff',
+    fontSize: 12,
+    textAlign: 'center' as const,
+    padding: '10px',
+    borderRadius: 12,
+    zIndex: 500,
+  },
+  ctrlCol: {
+    position: 'absolute',
     right: 14,
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    top: 12,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+    zIndex: 510,
+  },
+  ctrlBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     border: 'none',
-    background: '#007AFF',
-    boxShadow: '0 2px 10px rgba(0,122,255,0.4)',
+    background: 'rgba(0,0,0,0.55)',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 30,
+  },
+  gps: {
+    position: 'absolute',
+    bottom: 118,
+    right: 14,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    border: 'none',
+    background: 'var(--accent)',
+    boxShadow: '0 3px 12px rgba(0,122,255,0.45)',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 500,
   },
   card: {
     position: 'absolute',
-    bottom: 60,
+    bottom: 54,
     left: 12,
     right: 12,
-    background: '#fff',
+    background: 'var(--surface-card)',
     borderRadius: 16,
-    padding: '14px 16px',
-    boxShadow: '0 6px 24px rgba(0,0,0,0.18)',
-    zIndex: 30,
+    padding: '13px 16px',
+    boxShadow: '0 6px 24px rgba(0,0,0,0.2)',
+    zIndex: 500,
   },
-  cardTop: { display: 'flex', alignItems: 'center', gap: 12 },
-  cardEmoji: { fontSize: 30 },
+  cardTop: { display: 'flex', alignItems: 'center', gap: 10 },
+  cardPin: { flexShrink: 0 },
   cardMain: { flex: 1, minWidth: 0 },
-  cardName: { fontSize: 16, fontWeight: 700, color: '#111' },
-  cardCat: { fontSize: 12, color: '#8E8E93', marginTop: 2 },
+  cardName: { fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' },
+  cardCat: {
+    fontSize: 11,
+    color: 'var(--text-secondary)',
+    marginTop: 2,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap' as const,
+  },
   cardClose: {
     border: 'none',
-    background: '#F2F2F7',
+    background: 'var(--bg-tertiary)',
     width: 28,
     height: 28,
     borderRadius: 14,
@@ -311,6 +518,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   navBtn: {
     marginTop: 12,
@@ -319,34 +527,13 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    padding: '12px 0',
-    borderRadius: 24,
+    padding: '11px 0',
+    borderRadius: 22,
     border: 'none',
-    background: '#007AFF',
+    background: 'var(--accent)',
     color: '#fff',
     fontSize: 14,
     fontWeight: 600,
     cursor: 'pointer',
-  },
-  navRow: { marginTop: 12, display: 'flex', alignItems: 'center', gap: 12 },
-  navInfo: { flexShrink: 0 },
-  navBig: { fontSize: 18, fontWeight: 700, color: '#007AFF' },
-  navSmall: { fontSize: 11, color: '#8E8E93' },
-  navBar: { flex: 1, height: 6, borderRadius: 3, background: '#E5E5EA', overflow: 'hidden' },
-  navFill: { height: '100%', background: '#007AFF', borderRadius: 3, transition: 'width 0.3s' },
-  steps: {
-    position: 'absolute',
-    bottom: 150,
-    left: 12,
-    right: 12,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    background: 'rgba(0,0,0,0.8)',
-    color: '#fff',
-    padding: '12px',
-    borderRadius: 14,
-    zIndex: 40,
   },
 };

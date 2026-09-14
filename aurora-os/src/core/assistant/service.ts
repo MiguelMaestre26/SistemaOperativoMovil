@@ -1,7 +1,7 @@
 import type { AssistantMessage, AssistantProvider } from './types';
 import { getSystemContext, internetOnline, parseToolTokens, tools } from './tools';
 import { OllamaProvider } from './providers/ollama';
-import { OfflineProvider } from './providers/offline';
+import { OfflineProvider, answer } from './providers/offline';
 
 const TOOL_GUIDE = tools
   .map(t => {
@@ -12,7 +12,7 @@ const TOOL_GUIDE = tools
 
 function buildSystemPrompt(context: string): string {
   return [
-    'Eres Chocolate Plan, el asistente de inteligencia artificial integrado en AuroraOS, un teléfono simulado.',
+    'Eres Chocolate, el asistente de inteligencia artificial integrado en AuroraOS, un teléfono simulado.',
     'Puedes hablar con el usuario, responder preguntas y CONTROLAR el teléfono de verdad.',
     '',
     'CONTEXTO ACTUAL DEL TELÉFONO:',
@@ -27,6 +27,7 @@ function buildSystemPrompt(context: string): string {
     'Pregunta: "sube el brillo" -> Respuesta: ::set_brightness::60',
     'Pregunta: "apaga el wifi" -> Respuesta: ::toggle_wifi::false',
     'Pregunta: "cómo está la batería" -> Respuesta: ::get_battery::',
+    'Pregunta: "busca recetas en safari" -> Respuesta: ::open_search::recetas',
     '',
     'Consulta el contexto con ::get_status:: para responder con datos reales.',
     'Para conversación normal (saludos, chiste, explicación), responde con texto breve y natural en el idioma del usuario.',
@@ -69,9 +70,19 @@ class AssistantService {
     history: AssistantMessage[],
     onDelta?: (fullText: string) => void
   ): Promise<string> {
+    // Ruta rápida: si la consulta es un comando reconocido, se ejecuta al momento
+    // sin esperar al LLM (abrir apps, ajustes, consultas de sistema, búsqueda web).
+    const last = [...history].reverse().find(m => m.role === 'user');
+    const quick = last?.text ? answer(last.text) : null;
+    if (quick) {
+      const finished = await this.finish(quick);
+      onDelta?.(finished);
+      return finished;
+    }
+
     const provider = await this.resolve();
     const context = getSystemContext();
-    const raw = await provider.send(buildSystemPrompt(context), history, onDelta);
+    const raw = await provider.send(buildSystemPrompt(context), history.slice(-8), onDelta);
     return this.finish(raw);
   }
 

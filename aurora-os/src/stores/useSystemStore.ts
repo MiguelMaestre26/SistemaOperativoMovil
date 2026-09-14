@@ -5,6 +5,7 @@ import { memoryManager } from '../core/MemoryManager';
 import { storageManager } from '../core/StorageManager';
 import { loadState, saveState } from '../core/persistence';
 import { notificationService } from '../core/NotificationService';
+import type { PowerState, WallpaperFit, WallpaperPosition } from '../types';
 
 const WALLPAPER_MAX = 1280;
 
@@ -50,10 +51,16 @@ interface SystemStore {
   isFocusMode: boolean;
   currentTime: Date;
   wallpaper: string;
+  wallpaperFit: WallpaperFit;
+  wallpaperPosition: WallpaperPosition;
+  accent: string;
   totalStorage: number;
   usedStorage: number;
   totalMemory: number;
   usedMemory: number;
+  screenLocked: boolean;
+  powerState: PowerState;
+  pinCode: string;
   setBatteryLevel: (level: number) => void;
   setCharging: (value: boolean) => void;
   setBrightness: (value: number) => void;
@@ -65,7 +72,13 @@ interface SystemStore {
   setDoNotDisturb: (value: boolean) => void;
   setFocusMode: (value: boolean) => void;
   setWallpaper: (url: string) => void;
+  setWallpaperFit: (fit: WallpaperFit) => void;
+  setWallpaperPosition: (position: WallpaperPosition) => void;
+  setAccent: (accent: string) => void;
   updateTime: () => void;
+  setScreenLocked: (value: boolean) => void;
+  setPowerState: (value: PowerState) => void;
+  setPinCode: (pin: string) => void;
 }
 
 let preAirplane = { wifi: true, bluetooth: false };
@@ -83,10 +96,16 @@ export const useSystemStore = create<SystemStore>((set) => ({
   isFocusMode: false,
   currentTime: new Date(),
   wallpaper: loadState<string>('wallpaper', ''),
+  wallpaperFit: loadState<WallpaperFit>('wallpaperFit', 'cover'),
+  wallpaperPosition: loadState<WallpaperPosition>('wallpaperPosition', 'center'),
+  accent: loadState<string>('auroraos:accent', 'blue'),
   totalStorage: storageManager.getTotal(),
   usedStorage: storageManager.getUsed(),
   totalMemory: memoryManager.getTotal(),
   usedMemory: memoryManager.getUsed(),
+  screenLocked: true,
+  powerState: 'on',
+  pinCode: loadState<string>('auroraos:pin', '1234'),
 
   setBatteryLevel: (level) => set({ batteryLevel: level }),
   setCharging: (value) => {
@@ -110,6 +129,10 @@ export const useSystemStore = create<SystemStore>((set) => ({
   },
   setDoNotDisturb: (value) => set({ isDoNotDisturb: value }),
   setFocusMode: (value) => set({ isFocusMode: value }),
+  setAccent: (accent) => {
+    saveState('auroraos:accent', accent);
+    set({ accent });
+  },
   setWallpaper: (url) => {
     void prepareWallpaper(url).then(final => {
       saveState('wallpaper', final);
@@ -117,7 +140,21 @@ export const useSystemStore = create<SystemStore>((set) => ({
       notificationService.push('launcher', 'Fondo de pantalla', final ? 'Fondo actualizado.' : 'Fondo restaurado.');
     });
   },
+  setWallpaperFit: (fit) => {
+    saveState('wallpaperFit', fit);
+    set({ wallpaperFit: fit });
+  },
+  setWallpaperPosition: (position) => {
+    saveState('wallpaperPosition', position);
+    set({ wallpaperPosition: position });
+  },
   updateTime: () => set({ currentTime: new Date() }),
+  setScreenLocked: (value) => set({ screenLocked: value }),
+  setPowerState: (value) => set({ powerState: value }),
+  setPinCode: (pin) => {
+    saveState('auroraos:pin', pin);
+    set({ pinCode: pin });
+  },
 }));
 
 eventBus.on('battery:changed', (args) => {

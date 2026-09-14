@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('auroraNative', {
   isElectron: true,
   netRequest: (opts) => ipcRenderer.invoke('net:request', opts),
+  openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
   onOpenInTab: (cb) => {
     const listener = (_event, url) => cb(url);
     ipcRenderer.on('aurora:open-in-tab', listener);

@@ -1,15 +1,16 @@
-import { useState } from 'react';
-import { Send, ExternalLink, ShieldCheck, RotateCcw } from 'lucide-react';
-import { openExternal, TG_WEB, tgChat } from '../../../core/webapp';
-import { notificationService } from '../../../core/NotificationService';
+import { useRef, useState } from 'react';
+import { Send, ShieldCheck, ChevronLeft } from 'lucide-react';
+import { TG_WEB, tgChat } from '../../../core/webapp';
 import { isNative } from '../../../core/native';
 import { openInOs } from '../../../core/browserSession';
-import { toggleOrientation } from '../../../core/orientation';
-import RealWebView from '../../shared/RealWebView';
+import { Screen, AppHeader, openPrompt } from '../../ui';
+import RealWebView, { type RealWebViewHandle } from '../../shared/RealWebView';
+import LinkAppLaunch from '../../shared/LinkAppLaunch';
 
 export default function TelegramApp() {
   const native = isNative();
   const [liveUrl, setLiveUrl] = useState(TG_WEB);
+  const wvRef = useRef<RealWebViewHandle>(null);
 
   const host = (() => {
     try {
@@ -22,30 +23,27 @@ export default function TelegramApp() {
 
   if (native) {
     return (
-      <div style={styles.container}>
+      <Screen scroll={false} padding="0">
+        <AppHeader variant="standard" title="Telegram" />
         <div style={styles.nativeTop}>
+          <button
+            className="pressable"
+            style={styles.nativeBack}
+            onClick={() => wvRef.current?.goBack()}
+            aria-label="Retroceder"
+            title="Retroceder"
+          >
+            <ChevronLeft size={22} color="#fff" />
+          </button>
           <div style={styles.nativeBrand}>
             <ShieldCheck size={13} color={official ? '#4CD964' : '#FF6B6B'} />
-            <span style={styles.nativeTitle}>Telegram</span>
+            <span style={styles.nativeTitle}>{host || '…'}</span>
           </div>
-          <span
-            style={{ ...styles.nativeUrlText, color: official ? '#E8FFF0' : '#FFD9D9' }}
-            title={liveUrl}
-          >
-            {host || '…'}
-          </span>
           <button
+            className="pressable"
             style={styles.nativeBtn}
-            onClick={toggleOrientation}
-            title="Rotar pantalla (horizontal/vertical)"
-            aria-label="Rotar pantalla"
-          >
-            <RotateCcw size={13} color="#fff" />
-          </button>
-          <button
-            style={styles.nativeBtn}
-            onClick={() => {
-              const n = window.prompt('Número de teléfono de la persona (ej. 50688880001):');
+            onClick={async () => {
+              const n = await openPrompt({ title: 'Número de teléfono de la persona', placeholder: 'ej. 50688880001', confirmText: 'Abrir' });
               if (n?.trim()) openInOs(tgChat(n.trim()));
             }}
           >
@@ -53,61 +51,25 @@ export default function TelegramApp() {
           </button>
         </div>
         <div style={styles.nativeBody}>
-          <RealWebView src={TG_WEB} partition="aurora-tg" onUrl={setLiveUrl} />
+          <RealWebView ref={wvRef} src={TG_WEB} partition="aurora-tg" onUrl={setLiveUrl} />
         </div>
-      </div>
+      </Screen>
     );
   }
 
-  const open = (url: string, msg: string) => {
-    openExternal(url);
-    notificationService.push('telegram', 'Telegram Web', msg);
-  };
-
   return (
-    <div style={styles.container}>
-      <div style={styles.hero}>
-        <div style={styles.badge}>
-          <Send size={38} color="#fff" />
-        </div>
-        <div style={styles.title}>Telegram</div>
-        <div style={styles.subtitle}>Mensajes, grupos y llamadas reales<br />con tu cuenta de verdad.</div>
-      </div>
-
-      <div style={styles.body}>
-        <div style={styles.infoCard}>
-          <div style={styles.infoText}>
-            Este teléfono se conecta a <b>Telegram Web</b>, la versión oficial para navegador.
-            Se abrirá en una pestaña nueva: inicia sesión con tu teléfono o código QR y tendrás tus
-            chats, grupos y llamadas de audio/vídeo reales.
-          </div>
-        </div>
-
-        <button style={styles.mainBtn} onClick={() => open(TG_WEB, 'Te abrí Telegram Web. Inicia sesión y llama a quien quieras.')}>
-          <ExternalLink size={18} color="#fff" />
-          <span>Abrir Telegram Web</span>
-        </button>
-
-        <button style={styles.chatBtn} onClick={() => {
-          const n = window.prompt('Número de teléfono de la persona (ej. 50688880001):');
-          if (n?.trim()) open(tgChat(n.trim()), `Telegram abierto. Busca el chat con el número que indicaste.`);
-        }}>
-          <span>Ir al chat por número</span>
-        </button>
-
-        <div style={styles.hint}>La llamada se realiza dentro de tu sesión de Telegram (botón de llamada en el chat).</div>
-      </div>
-    </div>
+    <LinkAppLaunch
+      title="Telegram"
+      url={TG_WEB}
+      icon={<Send size={38} color="#fff" />}
+      subtitle="Se abrió Telegram Web. Inicia sesión con tu teléfono o código QR."
+      bg="linear-gradient(160deg, #2AABEE 0%, #0E7BB6 100%)"
+      accent="#2AABEE"
+    />
   );
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  container: {
-    height: '100%',
-    display: 'flex',
-    flexDirection: 'column',
-    background: 'var(--bg-primary)',
-  },
   nativeTop: {
     display: 'flex',
     alignItems: 'center',
@@ -116,19 +78,20 @@ const styles: Record<string, React.CSSProperties> = {
     background: 'linear-gradient(160deg, #2AABEE 0%, #0E7BB6 100%)',
     flexShrink: 0,
   },
-  nativeBrand: { display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 },
-  nativeTitle: { fontSize: 14, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap' },
-  nativeUrlText: {
-    flex: 1,
-    minWidth: 0,
-    textAlign: 'left',
-    fontFamily: 'Consolas, Menlo, monospace',
-    fontSize: 11,
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    color: 'inherit',
+  nativeBack: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    border: 'none',
+    background: 'rgba(255,255,255,0.18)',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    cursor: 'pointer',
+    flexShrink: 0,
   },
+  nativeBrand: { display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 },
+  nativeTitle: { fontSize: 14, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' },
   nativeBtn: {
     display: 'flex',
     alignItems: 'center',
@@ -144,59 +107,4 @@ const styles: Record<string, React.CSSProperties> = {
     flexShrink: 0,
   },
   nativeBody: { flex: 1, minHeight: 0 },
-  hero: {
-    background: 'linear-gradient(160deg, #2AABEE 0%, #0E7BB6 100%)',
-    padding: '40px 20px 28px',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: 10,
-    textAlign: 'center' as const,
-  },
-  badge: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    background: 'rgba(255,255,255,0.18)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: { fontSize: 24, fontWeight: 700, color: '#fff' },
-  subtitle: { fontSize: 13, color: 'rgba(255,255,255,0.85)', lineHeight: 1.5 },
-  body: { flex: 1, padding: '20px 18px', display: 'flex', flexDirection: 'column', gap: 12, overflowY: 'auto' },
-  infoCard: {
-    background: 'rgba(120,180,255,0.10)',
-    borderRadius: 14,
-    padding: '14px 16px',
-  },
-  infoText: { fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 },
-  mainBtn: {
-    width: '100%',
-    height: 52,
-    borderRadius: 14,
-    border: 'none',
-    background: '#2AABEE',
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 600,
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    boxShadow: '0 4px 18px rgba(42,171,238,0.35)',
-  },
-  chatBtn: {
-    width: '100%',
-    height: 46,
-    borderRadius: 14,
-    border: '1px solid rgba(42,171,238,0.4)',
-    background: 'transparent',
-    color: '#2AABEE',
-    fontSize: 14,
-    fontWeight: 600,
-    cursor: 'pointer',
-  },
-  hint: { fontSize: 12, color: 'var(--text-tertiary)', textAlign: 'center' as const, marginTop: 4 },
 };

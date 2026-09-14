@@ -23,6 +23,7 @@ interface AuroraNativeBridge {
     mimeType?: string;
     dataUrl?: string;
   }>;
+  openExternal?: (url: string) => Promise<void>;
   onOpenInTab?: (cb: (url: string) => void) => () => void;
   onDownloadReceipt?: (cb: (receipt: DownloadReceipt) => void) => () => void;
   onDownloadImage?: (cb: (url: string) => void) => () => void;
@@ -77,6 +78,15 @@ export function onNativeDownload(cb: (receipt: DownloadReceipt) => void): () => 
 
 export function onNativeDownloadImage(cb: (url: string) => void): () => void {
   return window.auroraNative?.onDownloadImage?.(cb) ?? (() => {});
+}
+
+export async function openExternalBrowser(url: string): Promise<void> {
+  const bridge = window.auroraNative;
+  if (bridge?.openExternal) {
+    await bridge.openExternal(url).catch(() => {});
+    return;
+  }
+  window.open(url, '_blank', 'noopener,noreferrer');
 }
 
 let bridgeBound = false;

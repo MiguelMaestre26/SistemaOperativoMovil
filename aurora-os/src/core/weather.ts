@@ -1,3 +1,5 @@
+import { isNative, nativeRequest } from './native';
+
 export interface CurrentWeather {
   temp: number;
   feels: number;
@@ -31,14 +33,29 @@ export interface WeatherReport {
   fetchedAt: number;
 }
 
-const LOCATIONS = [
-  { name: 'San José, CR', lat: 9.9281, lon: -84.0907 },
-  { name: 'Heredia, CR', lat: 9.9985, lon: -84.1165 },
-  { name: 'Cartago, CR', lat: 9.8644, lon: -83.9194 },
-  { name: 'Alajuela, CR', lat: 10.0162, lon: -84.2131 },
-];
+export interface City {
+  name: string;
+  lat: number;
+  lon: number;
+}
 
-export const UNIT = '°C';
+export const DEFAULT_CITY: City = { name: 'Caracas, Venezuela', lat: 10.48801, lon: -66.87919 };
+export const FAVORITE_CITIES: City[] = [
+  { name: 'Caracas, Venezuela', lat: 10.48801, lon: -66.87919 },
+  { name: 'San José, Costa Rica', lat: 9.93388, lon: -84.08489 },
+  { name: 'Ciudad de México, México', lat: 19.42847, lon: -99.12766 },
+  { name: 'Bogotá, Colombia', lat: 4.60971, lon: -74.08175 },
+  { name: 'Buenos Aires, Argentina', lat: -34.61315, lon: -58.37723 },
+  { name: 'Sao Paulo, Brasil', lat: -23.5475, lon: -46.63611 },
+  { name: 'Nueva York, Estados Unidos', lat: 40.71427, lon: -74.00597 },
+  { name: 'Madrid, España', lat: 40.4165, lon: -3.70256 },
+  { name: 'Londres, Reino Unido', lat: 51.50853, lon: -0.12574 },
+  { name: 'París, Francia', lat: 48.85341, lon: 2.3488 },
+  { name: 'Tokio, Japón', lat: 35.6895, lon: 139.69171 },
+  { name: 'Sídney, Australia', lat: -33.86882, lon: 151.2093 },
+];
+export const UNIT_C = '°C';
+export const UNIT_F = '°F';
 
 export function weatherCodeInfo(code: number, isDay: boolean): { label: string; emoji: string } {
   if (code === 0) return { label: isDay ? 'Soleado' : 'Despejado', emoji: isDay ? '☀️' : '🌙' };
@@ -64,9 +81,9 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-function generateOffline(now: Date, location: string): WeatherReport {
+function generateOffline(now: Date, cityName: string, unit: string): WeatherReport {
   const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const seed = Math.floor(dayStart / 86400000) + location.length;
+  const seed = Math.floor(dayStart / 86400000) + cityName.length;
   const rand = mulberry32(seed);
   const base = 24 + rand() * 6;
   const wave = Math.sin((now.getHours() - 6) / 12 * Math.PI);
@@ -98,8 +115,8 @@ function generateOffline(now: Date, location: string): WeatherReport {
   }
 
   return {
-    location,
-    unit: UNIT,
+    location: cityName,
+    unit,
     current: {
       temp: currentTemp,
       feels: currentTemp - 1,
@@ -114,17 +131,53 @@ function generateOffline(now: Date, location: string): WeatherReport {
   };
 }
 
-export async function fetchWeather(): Promise<WeatherReport> {
-  const loc = LOCATIONS[Math.floor(Math.random() * LOCATIONS.length)];
+function parseSearchResults(data: { results?: Array<Record<string, unknown>> }): City[] {
+  return (data.results ?? [])
+    .map(r => ({
+      name: [r.name, r.admin1, r.country].filter(Boolean).join(', '),
+      lat: Number(r.latitude),
+      lon: Number(r.longitude),
+    }))
+    .filter(c => Number.isFinite(c.lat) && Number.isFinite(c.lon));
+}
+
+export async function searchCity(query: string): Promise<City[]> {
+  if (!query.trim()) return [];
+  const params = new URLSearchParams({ name: query.trim(), count: '10', language: 'es', format: 'json' });
+  const url = `https://geocoding-api.open-meteo.com/v1/search?${params}`;
+
+  if (isNative()) {
+    try {
+      const r = await nativeRequest(url);
+      if (r.ok) return parseSearchResults(JSON.parse(r.text));
+    } catch { /* se intenta el fetch normal */ }
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 6000);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) throw new Error('search failed');
+    return parseSearchResults(await res.json());
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function fetchWeather(city: City = DEFAULT_CITY, tempUnit: 'C' | 'F' = 'C'): Promise<WeatherReport> {
+  const unitLabel = tempUnit === 'F' ? UNIT_F : UNIT_C;
   const params = new URLSearchParams({
-    latitude: String(loc.lat),
-    longitude: String(loc.lon),
+    latitude: String(city.lat),
+    longitude: String(city.lon),
     current:
       'temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,is_day',
     hourly: 'temperature_2m,weather_code',
     daily: 'weather_code,temperature_2m_max,temperature_2m_min',
     timezone: 'auto',
     forecast_days: '7',
+    temperature_unit: tempUnit === 'F' ? 'fahrenheit' : 'celsius',
   });
 
   try {
@@ -155,8 +208,8 @@ export async function fetchWeather(): Promise<WeatherReport> {
     }));
 
     return {
-      location: loc.name,
-      unit: UNIT,
+      location: city.name,
+      unit: unitLabel,
       current: {
         temp: Math.round(data.current.temperature_2m),
         feels: Math.round(data.current.apparent_temperature),
@@ -170,6 +223,6 @@ export async function fetchWeather(): Promise<WeatherReport> {
       fetchedAt: Date.now(),
     };
   } catch {
-    return generateOffline(new Date(), loc.name);
+    return generateOffline(new Date(), city.name, unitLabel);
   }
 }

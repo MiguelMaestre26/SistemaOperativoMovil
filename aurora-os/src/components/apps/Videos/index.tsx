@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Play, Pause, SkipBack, SkipForward, Film, Eye } from 'lucide-react';
 import { tonePlayer, parseMelody } from '../../../core/audio';
+import { Screen, AppHeader, IconButton } from '../../ui';
 
 interface Clip {
   id: string;
@@ -173,9 +174,9 @@ export default function Videos() {
     return (
       <div style={styles.container}>
         <div style={styles.playerHeader}>
-          <button style={styles.iconBtn} onClick={() => setPlayingId(null)} aria-label="Cerrar">
-            <SkipBack size={20} color="#007AFF" />
-          </button>
+          <IconButton label="Cerrar" onClick={() => setPlayingId(null)}>
+            <SkipBack size={20} color="var(--accent)" />
+          </IconButton>
           <span style={styles.playerTitle}>{clip.title}</span>
           <span style={{ width: 30 }} />
         </div>
@@ -184,7 +185,7 @@ export default function Videos() {
           <canvas ref={canvasRef} style={styles.canvas} />
           {finished && (
             <div style={styles.replayOverlay}>
-              <button style={styles.replayBtn} onClick={() => { posRef.current = 0; setPos(0); setSession(s => s + 1); }}>
+              <button className="pressable" style={styles.replayBtn} onClick={() => { posRef.current = 0; setPos(0); setSession(s => s + 1); }}>
                 <Play size={28} color="#fff" />
               </button>
             </div>
@@ -203,13 +204,13 @@ export default function Videos() {
             <div style={{ ...styles.progressFill, width: `${pct}%` }} />
           </div>
           <div style={styles.playerControls}>
-            <button style={styles.ctlBtn} onClick={() => { posRef.current = Math.max(0, posRef.current - 5); startRef.current = performance.now() - posRef.current * 1000; }} aria-label="Retroceder">
+            <button className="pressable" style={styles.ctlBtn} onClick={() => { posRef.current = Math.max(0, posRef.current - 5); startRef.current = performance.now() - posRef.current * 1000; }} aria-label="Retroceder">
               <SkipBack size={20} color="#fff" />
             </button>
-            <button style={styles.playBtn} onClick={togglePause} aria-label="Reproducir/pausar">
+            <button className="pressable" style={styles.playBtn} onClick={togglePause} aria-label="Reproducir/pausar">
               {playingRef.current ? <Pause size={22} color="#fff" /> : <Play size={22} color="#fff" style={{ marginLeft: 2 }} />}
             </button>
-            <button style={styles.ctlBtn} onClick={() => { posRef.current = Math.min(clip.duration, posRef.current + 5); startRef.current = performance.now() - posRef.current * 1000; }} aria-label="Avanzar">
+            <button className="pressable" style={styles.ctlBtn} onClick={() => { posRef.current = Math.min(clip.duration, posRef.current + 5); startRef.current = performance.now() - posRef.current * 1000; }} aria-label="Avanzar">
               <SkipForward size={20} color="#fff" />
             </button>
           </div>
@@ -219,14 +220,18 @@ export default function Videos() {
   }
 
   return (
-    <div style={styles.container}>
-      <div style={styles.header}>
-        <Film size={20} color="#FF3B30" />
-        <span style={styles.title}>Videos</span>
-      </div>
+    <Screen scroll={false} padding="0">
+      <AppHeader
+        title="Videos"
+        right={
+          <div style={{ width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Film size={20} color="#FF3B30" />
+          </div>
+        }
+      />
       <div style={styles.feed}>
         {CLIPS.map(c => (
-          <button key={c.id} style={styles.card} onClick={() => { posRef.current = 0; setPlayingId(c.id); }}>
+          <button key={c.id} className="pressable" style={styles.card} onClick={() => { posRef.current = 0; setPlayingId(c.id); }}>
             <div style={{ ...styles.thumb, background: `linear-gradient(135deg, ${c.colors[0]}, ${c.colors[1]})` }}>
               <span style={styles.thumbIcon}>
                 <Play size={22} color="#fff" />
@@ -237,21 +242,19 @@ export default function Videos() {
               <div style={styles.cardTitle}>{c.title}</div>
               <div style={styles.cardDesc}>{c.desc}</div>
               <div style={styles.cardViews}>
-                <Eye size={12} color="#8E8E93" /> {c.views} vistas
+                <Eye size={12} color="var(--text-secondary)" /> {c.views} vistas
               </div>
             </div>
           </button>
         ))}
       </div>
-    </div>
+    </Screen>
   );
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  container: { height: '100%', display: 'flex', flexDirection: 'column', background: '#fff' },
-  header: { display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px 6px' },
-  title: { fontSize: 22, fontWeight: 700, color: '#111' },
-  feed: { flex: 1, overflowY: 'auto', padding: '0 16px 20px' },
+  container: { height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg-primary)' },
+  feed: { flex: 1, overflowY: 'auto', padding: '2px 16px 20px' },
   card: {
     width: '100%',
     border: 'none',
@@ -290,28 +293,17 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 8,
   },
   cardMain: { padding: '10px 2px 0' },
-  cardTitle: { fontSize: 15, fontWeight: 700, color: '#111' },
-  cardDesc: { fontSize: 13, color: '#8E8E93', marginTop: 3, lineHeight: 1.4 },
-  cardViews: { display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#8E8E93', marginTop: 6 },
+  cardTitle: { fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' },
+  cardDesc: { fontSize: 13, color: 'var(--text-secondary)', marginTop: 3, lineHeight: 1.4 },
+  cardViews: { display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--text-secondary)', marginTop: 6 },
   playerHeader: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: '8px 10px',
-    borderBottom: '0.5px solid rgba(0,0,0,0.08)',
+    borderBottom: '0.5px solid var(--separator-cell)',
   },
-  iconBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    border: 'none',
-    background: 'none',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  playerTitle: { fontSize: 14, fontWeight: 600, color: '#111' },
+  playerTitle: { fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' },
   stage: { position: 'relative', aspectRatio: '16/9', background: '#000', overflow: 'hidden' },
   canvas: { width: '100%', height: '100%', display: 'block' },
   pausedOverlay: {
@@ -342,9 +334,9 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'center',
   },
   playerInfo: { padding: '14px 16px', flex: 1 },
-  vidTitle: { fontSize: 17, fontWeight: 700, color: '#111' },
-  vidViews: { fontSize: 13, color: '#8E8E93', marginTop: 3 },
-  progressTrack: { height: 5, borderRadius: 3, background: '#E5E5EA', marginTop: 14, overflow: 'hidden' },
+  vidTitle: { fontSize: 17, fontWeight: 700, color: 'var(--text-primary)' },
+  vidViews: { fontSize: 13, color: 'var(--text-secondary)', marginTop: 3 },
+  progressTrack: { height: 5, borderRadius: 3, background: 'var(--bg-tertiary)', marginTop: 14, overflow: 'hidden' },
   progressFill: { height: '100%', background: '#FF3B30', borderRadius: 3 },
   playerControls: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 28, marginTop: 16 },
   ctlBtn: {

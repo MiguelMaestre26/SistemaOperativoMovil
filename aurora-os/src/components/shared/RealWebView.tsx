@@ -38,6 +38,7 @@ const RealWebView = forwardRef<RealWebViewHandle, RealWebViewProps>(function Rea
 ) {
   const hostRef = useRef<HTMLDivElement>(null);
   const wvRef = useRef<WebviewElement | null>(null);
+  const stackRef = useRef<string[]>([]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -50,9 +51,16 @@ const RealWebView = forwardRef<RealWebViewHandle, RealWebViewProps>(function Rea
     wv.style.height = '100%';
     wv.style.border = 'none';
 
+    const pushIfNew = (url: string) => {
+      const stack = stackRef.current;
+      if (stack[stack.length - 1] !== url) stack.push(url);
+    };
+
     const handleUrl = () => {
       try {
-        onUrl?.(wv.getURL());
+        const url = wv.getURL();
+        onUrl?.(url);
+        pushIfNew(url);
       } catch {
         /* noop */
       }
@@ -67,6 +75,7 @@ const RealWebView = forwardRef<RealWebViewHandle, RealWebViewProps>(function Rea
     wv.addEventListener('page-title-updated', handleTitle);
     wv.addEventListener('dom-ready', () => onLoad?.());
 
+    stackRef.current = [src];
     wv.src = src;
     host.appendChild(wv);
     wvRef.current = wv;
@@ -83,16 +92,33 @@ const RealWebView = forwardRef<RealWebViewHandle, RealWebViewProps>(function Rea
 
   useEffect(() => {
     const wv = wvRef.current;
-    if (wv && wv.src !== src) {
-      wv.src = src;
-    }
+    if (!wv) return;
+    const next = src;
+    const prev = stackRef.current[stackRef.current.length - 1] ?? '';
+    if (next === prev) return;
+    stackRef.current.push(next);
+    if (wv.src !== next) wv.src = next;
   }, [src]);
 
   useImperativeHandle(
     ref,
     () => ({
-      goBack: () => wvRef.current?.goBack(),
-      goForward: () => wvRef.current?.goForward(),
+      goBack: () => {
+        const wv = wvRef.current;
+        if (!wv) return;
+        try {
+          if (wv.canGoBack()) { wv.goBack(); return; }
+        } catch { /* noop */ }
+        const stack = stackRef.current;
+        if (stack.length < 2) return;
+        stack.pop();
+        const target = stack[stack.length - 1];
+        if (target && wv.getURL() !== target) wv.src = target;
+      },
+      goForward: () => {
+        const wv = wvRef.current;
+        try { if (wv?.canGoForward()) wv.goForward(); } catch { /* noop */ }
+      },
       reload: () => wvRef.current?.reload(),
       stop: () => wvRef.current?.stop(),
     }),

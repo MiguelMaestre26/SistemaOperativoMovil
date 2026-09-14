@@ -15,6 +15,7 @@ export interface AssistantTool {
   name: string;
   description: string;
   args: ToolArg[];
+  navigates?: boolean;
   run: (args: Record<string, string | number | boolean>) => string | null | Promise<string | null>;
 }
 

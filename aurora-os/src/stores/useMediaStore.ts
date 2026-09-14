@@ -1,11 +1,15 @@
 import { create } from 'zustand';
 import { loadState, saveState } from '../core/persistence';
 
+export type PhotoKind = 'image' | 'video';
+
 export interface Photo {
   id: string;
   uri: string;
   caption: string;
   createdAt: number;
+  type?: PhotoKind;
+  thumbnail?: string;
 }
 
 function seedPhotos(): Photo[] {
@@ -21,7 +25,7 @@ function seedPhotos(): Photo[] {
 
 interface MediaState {
   photos: Photo[];
-  addPhoto: (uri: string, caption?: string) => void;
+  addPhoto: (uri: string, caption?: string, type?: PhotoKind, thumbnail?: string) => void;
   removePhoto: (id: string) => void;
   clear: () => void;
 }
@@ -29,10 +33,10 @@ interface MediaState {
 export const useMediaStore = create<MediaState>((set) => ({
   photos: loadState('media:photos', seedPhotos()),
 
-  addPhoto: (uri, caption = 'Foto') =>
+  addPhoto: (uri, caption = 'Foto', type: PhotoKind = 'image', thumbnail?: string) =>
     set(s => {
       const photos = [
-        { id: `p_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, uri, caption, createdAt: Date.now() },
+        { id: `p_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, uri, caption, createdAt: Date.now(), type, thumbnail },
         ...s.photos,
       ];
       saveState('media:photos', photos);

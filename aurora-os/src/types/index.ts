@@ -1,4 +1,17 @@
 export type AppStatus = 'running' | 'paused' | 'terminated';
+export type PowerState = 'on' | 'off' | 'booting';
+export type WidgetType = 'clock' | 'weather' | 'battery' | 'notes' | 'calendar';
+export type WallpaperFit = 'cover' | 'contain' | 'stretch' | 'original';
+export type WallpaperPosition =
+  | 'center'
+  | 'top'
+  | 'bottom'
+  | 'left'
+  | 'right'
+  | 'top-left'
+  | 'top-right'
+  | 'bottom-left'
+  | 'bottom-right';
 
 export interface AppDefinition {
   id: string;
@@ -45,6 +58,8 @@ export interface SystemState {
   currentTime: Date;
   wallpaper: string;
   lockScreenWallpaper: string;
+  wallpaperFit: WallpaperFit;
+  wallpaperPosition: WallpaperPosition;
   totalStorage: number;
   usedStorage: number;
   totalMemory: number;
@@ -62,6 +77,8 @@ export interface SettingsState {
   timezone: string;
   wallpaper: string;
   lockScreenWallpaper: string;
+  wallpaperFit: WallpaperFit;
+  wallpaperPosition: WallpaperPosition;
   pinCode: string | null;
   biometricEnabled: boolean;
 }

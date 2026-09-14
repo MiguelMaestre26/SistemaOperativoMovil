@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Info } from 'lucide-react';
+import { Screen, AppHeader } from '../../ui';
 
 function cardinal(deg: number): string {
   const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'];
@@ -43,7 +44,6 @@ export default function CompassApp() {
         }
       }
       window.addEventListener('deviceorientation', handler, true);
-      // If no events within 2s, fallback to simulated
       last = performance.now();
       fallback = setInterval(() => {
         if (performance.now() - last > 2000) startFallbackOnce();
@@ -80,71 +80,70 @@ export default function CompassApp() {
   const deg = Math.round(((heading % 360) + 360) % 360);
 
   return (
-    <div style={styles.container}>
-      <div style={styles.title}>Brújula</div>
+    <Screen scroll={false} padding="0">
+      <AppHeader title="Brújula" />
 
-      <div style={styles.dialWrap}>
-        <div style={styles.dial}>
-          {['N', 'E', 'S', 'O'].map((c, i) => (
-            <span
-              key={c}
-              style={{
-                ...styles.card,
-                transform: `rotate(${i * 90}deg)`,
-                color: c === 'N' ? '#FF3B30' : '#333',
-              }}
-            >
-              <span style={{ ...styles.cardInner, transform: `rotate(${-i * 90}deg)` }}>{c}</span>
-            </span>
-          ))}
-          {Array.from({ length: 24 }, (_, i) => i * 15).map(a => (
-            <span
-              key={a}
-              style={{
-                ...styles.tick,
-                top: 100 + Math.sin((a * Math.PI) / 180) * 128,
-                left: 100 - Math.cos((a * Math.PI) / 180) * 128,
-                height: a % 45 === 0 ? 10 : 5,
-                background: a % 45 === 0 ? '#8E8E93' : '#D1D1D6',
-              }}
-            />
-          ))}
+      <div style={styles.body}>
+        <div style={styles.dialWrap}>
+          <div style={styles.dial}>
+            {['N', 'E', 'S', 'O'].map((c, i) => (
+              <span
+                key={c}
+                style={{
+                  ...styles.card,
+                  transform: `rotate(${i * 90}deg)`,
+                  color: c === 'N' ? 'var(--danger)' : 'var(--text-secondary)',
+                }}
+              >
+                <span style={{ ...styles.cardInner, transform: `rotate(${-i * 90}deg)` }}>{c}</span>
+              </span>
+            ))}
+            {Array.from({ length: 24 }, (_, i) => i * 15).map(a => (
+              <span
+                key={a}
+                style={{
+                  ...styles.tick,
+                  top: 100 + Math.sin((a * Math.PI) / 180) * 128,
+                  left: 100 - Math.cos((a * Math.PI) / 180) * 128,
+                  height: a % 45 === 0 ? 10 : 5,
+                  background: a % 45 === 0 ? '#8E8E93' : '#D1D1D6',
+                }}
+              />
+            ))}
+          </div>
+
+          <div style={{ ...styles.needle, transform: rot }}>
+            <div style={styles.needleNorth} />
+            <div style={styles.needleSouth} />
+          </div>
+
+          <div style={styles.circleCenter} />
         </div>
 
-        <div style={{ ...styles.needle, transform: rot }}>
-          <div style={styles.needleNorth} />
-          <div style={styles.needleSouth} />
+        <div style={styles.heading}>{deg}°</div>
+        <div style={styles.cardLabel}>{cardinal(deg)}</div>
+
+        <div style={styles.info}>
+          <Info size={13} color="var(--text-secondary)" />
+          <span style={{ fontSize: 11, color: 'var(--text-secondary)', textAlign: 'center' as const }}>
+            {sensor
+              ? 'Usando el sensor de orientación del dispositivo. Gira tu teléfono.'
+              : 'Simulación: el norte apunta hacia arriba de la pantalla en esta vista previa.'}
+          </span>
         </div>
-
-        <div style={styles.circleCenter} />
       </div>
-
-      <div style={styles.heading}>{deg}°</div>
-      <div style={styles.cardLabel}>{cardinal(deg)}</div>
-
-      <div style={styles.info}>
-        <Info size={13} color="#8E8E93" />
-        <span style={{ fontSize: 11, color: '#8E8E93', textAlign: 'center' as const }}>
-          {sensor
-            ? 'Usando el sensor de orientación del dispositivo. Gira tu teléfono.'
-            : 'Simulación: el norte apunta hacia arriba de la pantalla en esta vista previa.'}
-        </span>
-      </div>
-    </div>
+    </Screen>
   );
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  container: {
-    height: '100%',
+  body: {
+    flex: 1,
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    background: 'linear-gradient(180deg, #1A1E2E 0%, #0F1220 100%)',
-    color: '#fff',
     paddingTop: 14,
   },
-  title: { fontSize: 22, fontWeight: 700 },
   dialWrap: {
     position: 'relative',
     width: 260,
@@ -215,8 +214,8 @@ const styles: Record<string, React.CSSProperties> = {
     background: '#fff',
     boxShadow: '0 0 0 4px #FF3B30',
   },
-  heading: { fontSize: 56, fontWeight: 200, marginTop: 30 },
-  cardLabel: { fontSize: 20, fontWeight: 600, marginTop: 4 },
+  heading: { fontSize: 56, fontWeight: 200, marginTop: 30, color: 'var(--text-primary)' },
+  cardLabel: { fontSize: 20, fontWeight: 600, marginTop: 4, color: 'var(--text-primary)' },
   info: {
     display: 'flex',
     alignItems: 'flex-start',
@@ -224,6 +223,6 @@ const styles: Record<string, React.CSSProperties> = {
     margin: 'auto 24px 24px',
     padding: '10px 14px',
     borderRadius: 12,
-    background: 'rgba(255,255,255,0.06)',
+    background: 'var(--surface-card)',
   },
 };

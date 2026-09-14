@@ -1,55 +1,247 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-sans: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
 }
 
+/* ============================================================
+   AuroraOS · Material You (M3) design tokens
+   Los acentos se cambian con el atributo data-accent en <html>.
+   ============================================================ */
+
 :root {
-  --bg-primary: #F2F2F7;
-  --bg-secondary: #FFFFFF;
-  --bg-tertiary: #E5E5EA;
-  --text-primary: #1C1C1E;
-  --text-secondary: #8E8E93;
-  --text-tertiary: #AEAEB2;
-  --accent: #007AFF;
-  --accent-hover: #0056CC;
-  --success: #34C759;
-  --warning: #FF9500;
-  --danger: #FF3B30;
-  --separator: rgba(60, 60, 67, 0.12);
-  --overlay: rgba(0, 0, 0, 0.4);
-  --glass: rgba(255, 255, 255, 0.72);
-  --glass-border: rgba(255, 255, 255, 0.5);
-  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
-  --shadow-md: 0 4px 12px rgba(0,0,0,0.12);
-  --shadow-lg: 0 8px 32px rgba(0,0,0,0.16);
+  /* ---- Superficies y texto (neutrales) ---- */
+  --surface: #FDFCFF;
+  --on-surface: #1A1C1E;
+  --surface-dim: #DAD9DB;
+  --surface-bright: #FDFCFF;
+  --surface-variant: #DFE2EB;
+  --on-surface-variant: #43474E;
+  --surface-container-lowest: #FFFFFF;
+  --surface-container-low: #F6F7FA;
+  --surface-container: #F0F1F4;
+  --surface-container-high: #EBEBEE;
+  --surface-container-highest: #E5E5E9;
+  --outline: #74777F;
+  --outline-variant: #C3C6CF;
+  --inverse-surface: #2F3033;
+  --inverse-on-surface: #F1F0F3;
+  --error: #BA1A1A;
+  --on-error: #FFFFFF;
+  --error-container: #FFDAD6;
+  --on-error-container: #410002;
+  --scrim: #000000;
+  --shadow: #000000;
+
+  /* ---- Acento por defecto: Aurora Blue ---- */
+  --primary: #0061A4;
+  --on-primary: #FFFFFF;
+  --primary-container: #D3E4FF;
+  --on-primary-container: #0B1E35;
+  --inverse-primary: #A8C7FF;
+  --secondary: #535F70;
+  --on-secondary: #FFFFFF;
+  --secondary-container: #D6E3F7;
+  --on-secondary-container: #101C2B;
+  --tertiary: #6B5778;
+  --on-tertiary: #FFFFFF;
+  --tertiary-container: #F2DAFF;
+  --on-tertiary-container: #251431;
+  --surface-tint: #0061A4;
+
+  /* ---- Semánticos ---- */
+  --success: #2E7D32;
+  --success-container: #CDEED8;
+  --warning: #8A5800;
+  --warning-container: #FFE0B2;
+  --danger: var(--error);
+  --danger-container: var(--error-container);
+
+  /* ---- Alias heredados (compatibilidad) ---- */
+  --bg-primary: var(--surface);
+  --bg-secondary: var(--surface-container-low);
+  --bg-tertiary: var(--surface-container-highest);
+  --text-primary: var(--on-surface);
+  --text-secondary: var(--on-surface-variant);
+  --text-tertiary: var(--outline);
+  --accent: var(--primary);
+  --accent-hover: color-mix(in srgb, var(--primary) 88%, #000);
+  --separator: var(--outline-variant);
+  --overlay: var(--scrim);
+  --glass: rgba(246, 247, 250, 0.82);
+  --glass-border: rgba(195, 198, 207, 0.7);
+  --glass-strong: rgba(250, 250, 252, 0.96);
+  --glass-border-strong: rgba(195, 198, 207, 0.8);
+  --surface-card: var(--surface-container-low);
+  --surface-input: var(--surface-container-highest);
+  --text-on-accent: var(--on-primary);
+  --separator-cell: var(--outline-variant);
+  --widget-tint: rgba(211, 228, 255, 0.6);
+  --widget-tint-border: rgba(118, 152, 205, 0.45);
+  --wallpaper-dim: rgba(0, 0, 0, 0.18);
+
+  /* ---- Elevación M3 ---- */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.28), 0 1px 3px 1px rgba(0,0,0,0.12);
+  --shadow-md: 0 3px 6px rgba(0,0,0,0.24), 0 2px 6px 2px rgba(0,0,0,0.1);
+  --shadow-lg: 0 8px 12px rgba(0,0,0,0.26), 0 4px 8px 3px rgba(0,0,0,0.12);
+
+  /* ---- Radios M3 ---- */
   --radius-sm: 8px;
   --radius-md: 12px;
-  --radius-lg: 20px;
-  --radius-xl: 28px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 28px;
 }
 
 [data-theme="dark"] {
-  --bg-primary: #000000;
-  --bg-secondary: #1C1C1E;
-  --bg-tertiary: #2C2C2E;
-  --text-primary: #FFFFFF;
-  --text-secondary: #8E8E93;
-  --text-tertiary: #636366;
-  --accent: #0A84FF;
-  --accent-hover: #409CFF;
-  --success: #30D158;
-  --warning: #FF9F0A;
-  --danger: #FF453A;
-  --separator: rgba(84, 84, 88, 0.65);
-  --overlay: rgba(0, 0, 0, 0.6);
-  --glass: rgba(28, 28, 30, 0.72);
-  --glass-border: rgba(84, 84, 88, 0.36);
-  --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
-  --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
-  --shadow-lg: 0 8px 32px rgba(0,0,0,0.5);
+  --surface: #121316;
+  --on-surface: #E2E2E6;
+  --surface-dim: #121316;
+  --surface-bright: #38393C;
+  --surface-variant: #43474E;
+  --on-surface-variant: #C3C6CF;
+  --surface-container-lowest: #0D0E11;
+  --surface-container-low: #1A1B1E;
+  --surface-container: #1E1F22;
+  --surface-container-high: #28292D;
+  --surface-container-highest: #333437;
+  --outline: #8D9198;
+  --outline-variant: #43474E;
+  --inverse-surface: #E2E2E6;
+  --inverse-on-surface: #2F3033;
+  --error: #FFB4AB;
+  --on-error: #690005;
+  --error-container: #93000A;
+  --on-error-container: #FFDAD6;
+
+  --primary: #A8C7FF;
+  --on-primary: #0B385F;
+  --primary-container: #00497E;
+  --on-primary-container: #D3E4FF;
+  --inverse-primary: #0061A4;
+  --secondary: #BAC7DA;
+  --on-secondary: #2B3748;
+  --secondary-container: #3B4857;
+  --on-secondary-container: #D6E3F7;
+  --tertiary: #D6BEE4;
+  --on-tertiary: #3B2947;
+  --tertiary-container: #523F5F;
+  --on-tertiary-container: #F2DAFF;
+  --surface-tint: #A8C7FF;
+
+  --success: #81C995;
+  --success-container: #005437;
+  --warning: #FFB058;
+  --warning-container: #663F00;
+  --danger: var(--error);
+  --danger-container: var(--error-container);
+
+  --bg-primary: var(--surface);
+  --bg-secondary: var(--surface-container-low);
+  --bg-tertiary: var(--surface-container-highest);
+  --text-primary: var(--on-surface);
+  --text-secondary: var(--on-surface-variant);
+  --text-tertiary: var(--outline);
+  --accent: var(--primary);
+  --accent-hover: color-mix(in srgb, var(--primary) 88%, #fff);
+  --separator: var(--outline-variant);
+  --overlay: var(--scrim);
+  --glass: rgba(26, 27, 30, 0.85);
+  --glass-border: rgba(67, 71, 78, 0.7);
+  --glass-strong: rgba(30, 31, 34, 0.95);
+  --glass-border-strong: rgba(67, 71, 78, 0.82);
+  --surface-card: var(--surface-container-low);
+  --surface-input: var(--surface-container-highest);
+  --text-on-accent: var(--on-primary);
+  --separator-cell: var(--outline-variant);
+  --widget-tint: rgba(0, 73, 126, 0.55);
+  --widget-tint-border: rgba(108, 133, 167, 0.5);
+  --wallpaper-dim: rgba(0, 0, 0, 0.35);
 }
+
+/* ============================================================
+   Acentos Material You (colores dinámicos simulados)
+   ============================================================ */
+
+[data-accent="purple"] {
+  --primary: #6750A4; --on-primary: #FFFFFF; --primary-container: #EADDFF;
+  --on-primary-container: #21005D; --inverse-primary: #D0BCFF;
+  --secondary: #625B71; --secondary-container: #E8DEF8; --on-secondary-container: #1D192B;
+  --tertiary: #7D5260; --tertiary-container: #FFD8E4; --on-tertiary-container: #31111D;
+  --surface-tint: #6750A4;
+}
+[data-theme="dark"][data-accent="purple"] {
+  --primary: #D0BCFF; --on-primary: #381E72; --primary-container: #4F378B;
+  --on-primary-container: #EADDFF; --inverse-primary: #6750A4;
+  --secondary: #CCC2DC; --secondary-container: #4A4458; --on-secondary-container: #E8DEF8;
+  --tertiary: #EFB8C8; --tertiary-container: #633B48; --on-tertiary-container: #FFD8E4;
+  --surface-tint: #D0BCFF;
+}
+
+[data-accent="green"] {
+  --primary: #006A62; --on-primary: #FFFFFF; --primary-container: #70F7EB;
+  --on-primary-container: #00201D; --inverse-primary: #4DF2E4;
+  --secondary: #4A6361; --secondary-container: #CCE8E4; --on-secondary-container: #041F1D;
+  --tertiary: #426379; --tertiary-container: #C8E7FF; --on-tertiary-container: #001E2F;
+  --surface-tint: #006A62;
+}
+[data-theme="dark"][data-accent="green"] {
+  --primary: #4DF2E4; --on-primary: #003731; --primary-container: #005049;
+  --on-primary-container: #70F7EB; --inverse-primary: #006A62;
+  --secondary: #B0CCC8; --secondary-container: #334B49; --on-secondary-container: #CCE8E4;
+  --tertiary: #ADCDE4; --tertiary-container: #2A4B60; --on-tertiary-container: #C8E7FF;
+  --surface-tint: #4DF2E4;
+}
+
+[data-accent="orange"] {
+  --primary: #8F4C00; --on-primary: #FFFFFF; --primary-container: #FFDCC2;
+  --on-primary-container: #2E1500; --inverse-primary: #FFB87A;
+  --secondary: #755846; --secondary-container: #FFDCC8; --on-secondary-container: #2B1608;
+  --tertiary: #5F6240; --tertiary-container: #E5E7BC; --on-tertiary-container: #1B1E03;
+  --surface-tint: #8F4C00;
+}
+[data-theme="dark"][data-accent="orange"] {
+  --primary: #FFB87A; --on-primary: #4A2800; --primary-container: #6C3A00;
+  --on-primary-container: #FFDCC2; --inverse-primary: #8F4C00;
+  --secondary: #E7BEAA; --secondary-container: #5A4132; --on-secondary-container: #FFDCC8;
+  --tertiary: #C8CB98; --tertiary-container: #474B29; --on-tertiary-container: #E5E7BC;
+  --surface-tint: #FFB87A;
+}
+
+[data-accent="pink"] {
+  --primary: #9A3350; --on-primary: #FFFFFF; --primary-container: #FFD9E1;
+  --on-primary-container: #40000F; --inverse-primary: #FFB1C6;
+  --secondary: #75565F; --secondary-container: #FFD9E2; --on-secondary-container: #2B151C;
+  --tertiary: #7B5700; --tertiary-container: #FFDF9B; --on-tertiary-container: #261900;
+  --surface-tint: #9A3350;
+}
+[data-theme="dark"][data-accent="pink"] {
+  --primary: #FFB1C6; --on-primary: #5E1130; --primary-container: #7B1F40;
+  --on-primary-container: #FFD9E1; --inverse-primary: #9A3350;
+  --secondary: #E0BDC6; --secondary-container: #5B3F48; --on-secondary-container: #FFD9E2;
+  --tertiary: #E9C14E; --tertiary-container: #604100; --on-tertiary-container: #FFDF9B;
+  --surface-tint: #FFB1C6;
+}
+
+[data-accent="teal"] {
+  --primary: #00696E; --on-primary: #FFFFFF; --primary-container: #9AF0F6;
+  --on-primary-container: #002022; --inverse-primary: #4CD8E1;
+  --secondary: #4A6360; --secondary-container: #CCE8E3; --on-secondary-container: #051F1C;
+  --tertiary: #485E78; --tertiary-container: #CEE5FF; --on-tertiary-container: #001E33;
+  --surface-tint: #00696E;
+}
+[data-theme="dark"][data-accent="teal"] {
+  --primary: #4CD8E1; --on-primary: #00363A; --primary-container: #004F53;
+  --on-primary-container: #9AF0F6; --inverse-primary: #00696E;
+  --secondary: #B0CCC8; --secondary-container: #334B48; --on-secondary-container: #CCE8E3;
+  --tertiary: #B2C9E6; --tertiary-container: #31475F; --on-tertiary-container: #CEE5FF;
+  --surface-tint: #4CD8E1;
+}
+
+/* ============================================================ */
+/* Base                                                          */
+/* ============================================================ */
 
 * {
   margin: 0;
@@ -79,6 +271,7 @@ html, body, #root {
   border-radius: 2px;
 }
 
+/* Iconos y elementos táctiles */
 .app-icon-button {
   display: flex;
   flex-direction: column;
@@ -91,12 +284,17 @@ html, body, #root {
   transform: scale(0.9);
 }
 
+/* Paneles flotantes (M3 surface-container + elevación) */
 .glass-panel {
   background: var(--glass);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
   border: 1px solid var(--glass-border);
 }
+
+/* ============================================================ */
+/* Animaciones de transición                                     */
+/* ============================================================ */
 
 .transition-app-open {
   animation: appOpen 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
@@ -106,12 +304,12 @@ html, body, #root {
 }
 
 @keyframes appOpen {
-  from { transform: scale(0.8); opacity: 0; }
+  from { transform: scale(0.86); opacity: 0; }
   to { transform: scale(1); opacity: 1; }
 }
 @keyframes appClose {
   from { transform: scale(1); opacity: 1; }
-  to { transform: scale(0.8); opacity: 0; }
+  to { transform: scale(0.86); opacity: 0; }
 }
 
 @keyframes slideDown {
@@ -155,4 +353,163 @@ html, body, #root {
 }
 .animate-fade-in {
   animation: fadeIn 0.2s ease forwards;
+}
+
+/* ============================================================ */
+/* AuroraOS · Material You design system                         */
+/* ============================================================ */
+
+/* Tarjetas M3 */
+.glass-card {
+  background: var(--surface-container-low);
+  border: 1px solid var(--outline-variant);
+  box-shadow: var(--shadow-sm);
+  border-radius: var(--radius-lg);
+}
+
+/* Widgets M3 */
+.widget-container {
+  position: relative;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.18s cubic-bezier(0.25, 0.46, 0.45, 0.94), box-shadow 0.18s ease;
+}
+.widget-container:hover {
+  box-shadow: var(--shadow-md);
+}
+.widget-container:active {
+  transform: scale(0.97);
+}
+
+/* Píldora del home indicator */
+.home-indicator-grab {
+  transition: transform 0.15s ease, background 0.2s ease;
+}
+
+@keyframes bootGlow {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.06); }
+}
+.boot-glow {
+  animation: bootGlow 1.6s ease-in-out infinite;
+}
+
+@keyframes lockSwipeHint {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+.lock-swipe-hint {
+  animation: lockSwipeHint 2s ease-in-out infinite;
+}
+
+@keyframes pin-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8px); }
+  40% { transform: translateX(8px); }
+  60% { transform: translateX(-5px); }
+  80% { transform: translateX(5px); }
+}
+
+@keyframes notificationIn {
+  from { transform: translateY(-100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Modo edición de la pantalla de inicio (jiggle como iOS/Android) */
+@keyframes homeJiggle {
+  0%, 100% { transform: rotate(-2deg); }
+  25% { transform: rotate(2.2deg); }
+  50% { transform: rotate(-1.8deg); }
+  75% { transform: rotate(1.6deg); }
+}
+.home-jiggle {
+  animation: homeJiggle 0.32s ease-in-out infinite;
+  transform-origin: 50% 55%;
+}
+.home-dragging {
+  opacity: 0.25;
+  transform: scale(0.9);
+}
+
+/* ============================================================ */
+/* Escala tipográfica del sistema                                */
+/* ============================================================ */
+.typo-display { font-size: 38px; font-weight: 700; letter-spacing: -0.5px; line-height: 1.1; }
+.typo-title { font-size: 28px; font-weight: 700; letter-spacing: -0.4px; line-height: 1.2; }
+.typo-title2 { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; line-height: 1.25; }
+.typo-headline { font-size: 17px; font-weight: 600; line-height: 1.3; }
+.typo-body { font-size: 17px; font-weight: 400; line-height: 1.35; }
+.typo-callout { font-size: 16px; font-weight: 400; line-height: 1.3; }
+.typo-subhead { font-size: 15px; font-weight: 400; line-height: 1.3; }
+.typo-caption { font-size: 13px; font-weight: 400; line-height: 1.3; }
+.typo-footnote { font-size: 12px; font-weight: 400; line-height: 1.3; }
+.typo-caption2 { font-size: 11px; font-weight: 400; line-height: 1.3; }
+
+/* Presionado suave para elementos táctiles */
+.pressable {
+  transition: transform 0.12s ease, opacity 0.12s ease;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.pressable:active {
+  transform: scale(0.97);
+  opacity: 0.85;
+}
+
+/* Grupos de celdas de lista (separadores finos) */
+.cell-group > .cell-row .cell-sep {
+  height: 0.5px;
+  background: var(--separator-cell);
+}
+.cell-group > .cell-row:last-child .cell-sep {
+  display: none;
+}
+
+/* Skeleton de carga */
+@keyframes skeletonPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+.skeleton {
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  animation: skeletonPulse 1.4s ease-in-out infinite;
+}
+
+/* Fragmento de relleno para fondos decorativos */
+.fragment {
+  background-image: radial-gradient(circle at 25% 25%, rgba(255,255,255,0.28) 0%, transparent 55%);
+}
+
+/* ============================================================ */
+/* Utilidades M3                                                 */
+/* ============================================================ */
+
+.elev-1 { box-shadow: var(--shadow-sm); }
+.elev-2 { box-shadow: var(--shadow-md); }
+.elev-3 { box-shadow: var(--shadow-lg); }
+
+/* Capa de estado sobre iconos (hover/press resaltado) */
+.state-layer {
+  position: relative;
+}
+.state-layer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: currentColor;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+.state-layer:hover::after { opacity: 0.08; }
+.state-layer:active::after { opacity: 0.12; }
+
+/* Superficie tintada (efecto Monet sobre el wallpaper) */
+.surface-tint-overlay {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--surface-tint) 26%, transparent),
+    transparent 45%);
 }

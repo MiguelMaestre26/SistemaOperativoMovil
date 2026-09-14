@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ChevronLeft, ChevronRight, Trash2, CalendarPlus } from 'lucide-react';
 import { usePersistedState } from '../../../core/persistence';
+import { Screen, AppHeader, IconButton, ListGroup, ListRow, openPrompt } from '../../ui';
 
 interface CalendarEvent {
   id: string;
@@ -37,10 +38,10 @@ export default function CalendarApp() {
   const prev = () => setView(v => new Date(v.getFullYear(), v.getMonth() - 1, 1));
   const next = () => setView(v => new Date(v.getFullYear(), v.getMonth() + 1, 1));
 
-  const addEvent = (dateKey: string) => {
-    const title = window.prompt('Título del evento:');
+  const addEvent = async (dateKey: string) => {
+    const title = await openPrompt({ title: 'Título del evento:', placeholder: 'Nombre del evento' });
     if (!title?.trim()) return;
-    const time = window.prompt('Hora (ej. 9:00):', '09:00') || '9:00';
+    const time = (await openPrompt({ title: 'Hora (ej. 9:00):', value: '09:00' })) || '9:00';
     const color = COLORS[Math.floor(Math.random() * COLORS.length)];
     setEvents(es => [...es, { id: `ev_${Date.now()}`, date: dateKey, title: title.trim(), time, color }]);
   };
@@ -56,25 +57,27 @@ export default function CalendarApp() {
     ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
   ];
 
+  const selectedEventsSorted = selectedEvents
+    .slice()
+    .sort((a, b) => a.time.localeCompare(b.time));
+
   return (
-    <div style={styles.container}>
-      <div style={styles.header}>
-        <h1 style={styles.title}>Calendario</h1>
-      </div>
+    <Screen scroll={false} padding="0">
+      <AppHeader title="Calendario" />
 
       <div style={styles.monthNav}>
-        <button style={styles.navBtn} onClick={prev} aria-label="Mes anterior">
-          <ChevronLeft size={20} color="#007AFF" />
-        </button>
-        <span style={styles.monthName}>{monthName}</span>
-        <button style={styles.navBtn} onClick={next} aria-label="Mes siguiente">
-          <ChevronRight size={20} color="#007AFF" />
-        </button>
+        <IconButton label="Mes anterior" bg="rgba(0,122,255,0.1)" onClick={prev}>
+          <ChevronLeft size={18} color="var(--accent)" />
+        </IconButton>
+        <span className="typo-headline" style={styles.monthName}>{monthName}</span>
+        <IconButton label="Mes siguiente" bg="rgba(0,122,255,0.1)" onClick={next}>
+          <ChevronRight size={18} color="var(--accent)" />
+        </IconButton>
       </div>
 
       <div style={styles.grid}>
         {weekdayRow.map((d, i) => (
-          <div key={i} style={styles.weekday}>{d}</div>
+          <div key={i} className="typo-caption2" style={styles.weekday}>{d}</div>
         ))}
         {cells.map((day, i) => {
           if (day === null) return <div key={`e${i}`} style={styles.cell} />;
@@ -85,24 +88,17 @@ export default function CalendarApp() {
           return (
             <button
               key={key}
+              className="pressable"
               style={{
                 ...styles.cell,
                 ...(isSelected ? styles.cellSelected : {}),
-                ...(isToday && !isSelected ? styles.cellToday : {}),
               }}
               onClick={() => setSelected(key)}
             >
               <span style={{
-                width: 26,
-                height: 26,
-                borderRadius: 13,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 14,
-                fontWeight: isToday ? 700 : 500,
-                color: isToday && !isSelected ? '#fff' : '#111',
-                background: isToday && !isSelected ? '#FF9500' : 'none',
+                ...styles.dayNum,
+                color: isToday && !isSelected ? '#fff' : 'var(--text-primary)',
+                background: isToday && !isSelected ? 'var(--warning)' : 'none',
               }}>
                 {day}
               </span>
@@ -118,61 +114,53 @@ export default function CalendarApp() {
 
       <div style={styles.eventsCard}>
         <div style={styles.eventsHead}>
-          <span style={styles.eventsTitle}>
+          <span className="typo-subhead" style={styles.eventsTitle}>
             {new Date(`${selected}T00:00`).toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long' })}
           </span>
-          <button style={styles.addBtn} onClick={() => addEvent(selected)} aria-label="Agregar evento">
-            <CalendarPlus size={18} color="#fff" />
-          </button>
+          <IconButton label="Agregar evento" bg="var(--accent)" onClick={() => addEvent(selected)}>
+            <CalendarPlus size={16} color="#fff" />
+          </IconButton>
         </div>
-        {selectedEvents.length === 0 ? (
+        {selectedEventsSorted.length === 0 ? (
           <div style={styles.noEvents}>Sin eventos. Toca + para agregar uno.</div>
         ) : (
-          selectedEvents
-            .slice()
-            .sort((a, b) => a.time.localeCompare(b.time))
-            .map(e => (
-              <div key={e.id} style={styles.eventRow}>
-                <span style={{ ...styles.eventColor, background: e.color }} />
-                <div style={styles.eventMain}>
-                  <div style={styles.eventTitle}>{e.title}</div>
-                  <div style={styles.eventTime}>{e.time}</div>
-                </div>
-                <button style={styles.delEvent} onClick={() => removeEvent(e.id)} aria-label="Eliminar evento">
-                  <Trash2 size={16} color="#FF3B30" />
-                </button>
-              </div>
-            ))
+          <ListGroup inset={false}>
+            {selectedEventsSorted.map((e, i) => (
+              <ListRow
+                key={e.id}
+                showSeparator={i < selectedEventsSorted.length - 1}
+                icon={<span style={{ width: 4, height: 24, borderRadius: 2, background: e.color, display: 'block' }} />}
+                iconBg="transparent"
+                label={e.title}
+                sublabel={e.time}
+                value={
+                  <button className="pressable" style={styles.delEvent} onClick={() => removeEvent(e.id)} aria-label="Eliminar evento">
+                    <Trash2 size={16} color="var(--danger)" />
+                  </button>
+                }
+              />
+            ))}
+          </ListGroup>
         )}
-        <button style={styles.todayBar} onClick={() => { const d = new Date(); setView(new Date(d.getFullYear(), d.getMonth(), 1)); setSelected(today); }}>
+        <button className="pressable" style={styles.todayBar} onClick={() => { const d = new Date(); setView(new Date(d.getFullYear(), d.getMonth(), 1)); setSelected(today); }}>
           Volver a hoy
         </button>
       </div>
-    </div>
+    </Screen>
   );
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  container: { height: '100%', display: 'flex', flexDirection: 'column', background: '#fff' },
-  header: { padding: '12px 16px 4px' },
-  title: { fontSize: 22, fontWeight: 700, color: '#111', margin: 0 },
   monthNav: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, padding: '6px 0' },
-  navBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    border: 'none',
-    background: 'rgba(0,122,255,0.08)',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
+  monthName: {
+    color: 'var(--text-primary)',
+    textTransform: 'capitalize' as const,
+    minWidth: 130,
+    textAlign: 'center' as const,
   },
-  monthName: { fontSize: 17, fontWeight: 600, color: '#111', textTransform: 'capitalize' as const, minWidth: 130, textAlign: 'center' as const },
   grid: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, padding: '0 10px' },
   weekday: {
-    fontSize: 11,
-    color: '#8E8E93',
+    color: 'var(--text-secondary)',
     textAlign: 'center' as const,
     padding: '4px 0',
     fontWeight: 600,
@@ -189,50 +177,50 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     position: 'relative' as const,
   },
-  cellSelected: { background: 'rgba(0,122,255,0.12)' },
-  cellToday: {},
+  cellSelected: { background: 'rgba(0,122,255,0.14)' },
+  dayNum: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 14,
+    fontWeight: 500,
+  },
   dots: { display: 'flex', gap: 2, height: 5, marginTop: 2 },
   dot: { width: 4, height: 4, borderRadius: 2 },
   eventsCard: {
     flex: 1,
+    minHeight: 0,
     margin: '10px 12px 14px',
-    background: '#F7F7F9',
+    background: 'var(--surface-card)',
     borderRadius: 16,
-    padding: '14px 16px',
+    padding: '14px 12px',
     overflowY: 'auto',
   },
-  eventsHead: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
+  eventsHead: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px 6px' },
   eventsTitle: {
-    fontSize: 15,
+    color: 'var(--text-primary)',
     fontWeight: 700,
-    color: '#111',
     textTransform: 'capitalize' as const,
   },
-  addBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+  noEvents: { color: 'var(--text-tertiary)', fontSize: 13, marginTop: 16, textAlign: 'center' as const },
+  delEvent: {
     border: 'none',
-    background: '#007AFF',
-    color: '#fff',
+    background: 'none',
     cursor: 'pointer',
+    padding: 6,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  noEvents: { color: '#C7C7CC', fontSize: 13, marginTop: 16, textAlign: 'center' as const },
-  eventRow: { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '0.5px solid rgba(0,0,0,0.05)' },
-  eventColor: { width: 4, height: 34, borderRadius: 2, flexShrink: 0 },
-  eventMain: { flex: 1, minWidth: 0 },
-  eventTitle: { fontSize: 14, fontWeight: 500, color: '#111' },
-  eventTime: { fontSize: 12, color: '#8E8E93', marginTop: 2 },
-  delEvent: { border: 'none', background: 'none', cursor: 'pointer', padding: 6 },
   todayBar: {
     marginTop: 12,
     padding: '10px 0',
     border: 'none',
     background: 'rgba(0,122,255,0.08)',
-    color: '#007AFF',
+    color: 'var(--accent)',
     fontSize: 13,
     fontWeight: 600,
     borderRadius: 10,

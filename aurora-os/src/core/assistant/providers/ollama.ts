@@ -40,12 +40,7 @@ export class OllamaProvider implements AssistantProvider {
           : [];
       }
       if (models.length === 0) return false;
-      this.model =
-        models.find(m => m.includes('llama3.2')) ??
-        models.find(m => m.includes('llama3')) ??
-        models.find(m => m.includes('mistral')) ??
-        models.find(m => m.includes('qwen')) ??
-        models[0];
+      this.model = this.pickFastestModel(models);
       return true;
     } catch {
       return false;
@@ -56,6 +51,20 @@ export class OllamaProvider implements AssistantProvider {
 
   getModel(): string | null {
     return this.model;
+  }
+
+  // Prioriza los modelos pequeños/ligeros para respuestas más rápidas.
+  private pickFastestModel(models: string[]): string {
+    const prefers: string[] = [
+      'llama3.2:1b', 'llama3.2:3b', 'llama3.1:8b',
+      'qwen2.5:0.5b', 'qwen2.5:1.5b', 'qwen2.5:3b',
+      'tinyllama', 'phi3:mini', 'llama3.2', 'llama3', 'mistral', 'qwen',
+    ];
+    for (const p of prefers) {
+      const hit = models.find(m => m.includes(p));
+      if (hit) return hit;
+    }
+    return models[0];
   }
 
   async send(
@@ -77,6 +86,7 @@ export class OllamaProvider implements AssistantProvider {
           model: this.model ?? 'llama3.2',
           messages,
           stream: false,
+          keep_alive: '30m',
           options: { temperature: 0.6 },
         });
         if (!r.ok) throw new Error(`Ollama error HTTP ${r.status}`);
@@ -94,6 +104,7 @@ export class OllamaProvider implements AssistantProvider {
           model: this.model ?? 'llama3.2',
           messages,
           stream: true,
+          keep_alive: '30m',
           options: { temperature: 0.6 },
         }),
       });

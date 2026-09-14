@@ -1,25 +1,40 @@
 import { useState, useEffect } from 'react';
 import {
   Folder, FileText, ChevronRight, ArrowUp, Trash2, Download,
-  Search, HardDrive, Plus, Image as ImageIcon, Music as MusicIcon,
+  HardDrive, Plus, Image as ImageIcon, Music as MusicIcon,
   Video as VideoIcon, Home,
 } from 'lucide-react';
 import { storageManager, type StorageItem } from '../../../core/StorageManager';
 import { isImageItem } from '../../../core/downloads';
 import { notificationService } from '../../../core/NotificationService';
 import { useSystemStore } from '../../../stores/useSystemStore';
+import {
+  Screen, AppHeader, ListGroup, ListRow, SearchBar, EmptyState, Card, ProgressBar, IconButton,
+  openPrompt, openConfirm,
+} from '../../ui';
 
 const ROOT = 'root';
 
 function iconFor(item: StorageItem): React.ReactNode {
   if (item.type === 'folder') {
-    if (item.id === 'dcim') return <ImageIcon size={18} color="#8E8E93" style={{ marginRight: 10 }} />;
-    if (item.id === 'music') return <MusicIcon size={18} color="#8E8E93" style={{ marginRight: 10 }} />;
-    if (item.id === 'videos') return <VideoIcon size={18} color="#8E8E93" style={{ marginRight: 10 }} />;
-    if (item.id === 'downloads') return <Download size={18} color="#8E8E93" style={{ marginRight: 10 }} />;
-    return <Folder size={18} color="#007AFF" style={{ marginRight: 10 }} />;
+    if (item.id === 'dcim') return <ImageIcon size={18} color="#fff" />;
+    if (item.id === 'music') return <MusicIcon size={18} color="#fff" />;
+    if (item.id === 'videos') return <VideoIcon size={18} color="#fff" />;
+    if (item.id === 'downloads') return <Download size={18} color="#fff" />;
+    return <Folder size={18} color="#fff" />;
   }
-  return <FileText size={18} color="#8E8E93" style={{ marginRight: 10 }} />;
+  return <FileText size={18} color="#fff" />;
+}
+
+function iconBg(item: StorageItem): string {
+  if (item.type !== 'folder') return '#8E8E93';
+  switch (item.id) {
+    case 'dcim': return '#30B0C7';
+    case 'music': return '#FF2D55';
+    case 'videos': return '#FF9500';
+    case 'downloads': return 'var(--primary)';
+    default: return 'var(--tertiary)';
+  }
 }
 
 function formatSize(bytes: number): string {
@@ -68,63 +83,63 @@ export default function FileManager() {
     notificationService.push('file-manager', item.name, `Archivo ${item.mimeType ?? ''} (sin visor).`.trim());
   };
 
-  const createFile = () => {
-    const name = window.prompt('Nombre del archivo:');
+  const createFile = async () => {
+    const name = await openPrompt({ title: 'Nuevo archivo', placeholder: 'Nombre del archivo' });
     if (!name?.trim()) return;
     storageManager.createFile(name.trim(), currentId, '');
     refresh();
   };
 
-  const createFolder = () => {
-    const name = window.prompt('Nombre de la carpeta:');
+  const createFolder = async () => {
+    const name = await openPrompt({ title: 'Nueva carpeta', placeholder: 'Nombre de la carpeta' });
     if (!name?.trim()) return;
     storageManager.createFolder(name.trim(), currentId);
     refresh();
   };
 
-  const remove = (id: string) => {
+  const remove = async (id: string) => {
     const item = storageManager.getItem(id);
     if (!item) return;
-    if (window.confirm(`¿Eliminar "${item.name}"?`)) {
-      storageManager.deleteItem(id);
-      refresh();
-    }
+    const ok = await openConfirm({
+      title: 'Eliminar',
+      message: `¿Eliminar "${item.name}"?`,
+      confirmText: 'Eliminar',
+      destructive: true,
+    });
+    if (!ok) return;
+    storageManager.deleteItem(id);
+    refresh();
   };
 
   const filtered = query ? storageManager.search(query) : items;
 
   return (
-    <div style={styles.container}>
-      <div style={styles.header}>
-        <span style={styles.title}>Archivos</span>
-        <div style={styles.headerBtns}>
-          <button style={styles.iconBtn} onClick={createFolder} title="Nueva carpeta">
-            <Plus size={18} color="#007AFF" />
-          </button>
-          <button style={styles.iconBtn} onClick={createFile} title="Nuevo archivo">
-            <FileText size={18} color="#007AFF" />
-          </button>
-        </div>
-      </div>
+    <Screen scroll={false} padding="0" style={{ position: 'relative' }}>
+      <AppHeader
+        title="Archivos"
+        right={
+          <>
+            <IconButton label="Nueva carpeta" bg="rgba(0,122,255,0.12)" onClick={() => void createFolder()}>
+              <Plus size={18} color="var(--accent)" />
+            </IconButton>
+            <IconButton label="Nuevo archivo" bg="rgba(0,122,255,0.12)" onClick={() => void createFile()}>
+              <FileText size={18} color="var(--accent)" />
+            </IconButton>
+          </>
+        }
+      />
 
-      <div style={styles.searchBox}>
-        <Search size={15} color="#8E8E93" />
-        <input
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          placeholder="Buscar archivos…"
-          style={styles.searchInput}
-        />
-      </div>
+      <SearchBar value={query} onChange={setQuery} placeholder="Buscar archivos…" />
 
       <div style={styles.crumbs}>
-        <button style={styles.crumbBtn} onClick={() => setCurrentId(ROOT)} aria-label="Inicio">
-          <Home size={14} color="#007AFF" />
+        <button className="pressable" style={styles.crumbBtn} onClick={() => setCurrentId(ROOT)} aria-label="Inicio">
+          <Home size={14} color="var(--accent)" />
         </button>
         {crumbs.map((c, i) => (
           <span key={c.id} style={styles.crumbSeg}>
-            <ChevronRight size={12} color="#C7C7CC" />
+            <ChevronRight size={12} color="var(--text-tertiary)" />
             <button
+              className="pressable"
               style={styles.crumbText}
               onClick={() => i < crumbs.length - 1 && setCurrentId(c.id)}
             >
@@ -136,95 +151,98 @@ export default function FileManager() {
 
       {!query && currentId !== ROOT && (
         <button
+          className="pressable"
           style={styles.upBtn}
           onClick={() => {
             const parent = storageManager.getItem(currentId)?.parentId;
             if (parent) setCurrentId(parent);
           }}
         >
-          <ArrowUp size={15} color="#007AFF" /> Subir nivel
+          <ArrowUp size={15} color="var(--accent)" /> Subir nivel
         </button>
       )}
 
       <div style={styles.list}>
         {filtered.length === 0 ? (
-          <div style={styles.empty}>
-            <HardDrive size={40} color="#E5E5EA" />
-            <div style={styles.emptyText}>Carpeta vacía</div>
-          </div>
+          <EmptyState
+            icon={<HardDrive size={28} color="var(--text-secondary)" />}
+            title="Carpeta vacía"
+          />
         ) : (
-          filtered.map(item => (
-            <div
-              key={item.id}
-              style={styles.row}
-              onClick={() => open(item)}
-              onContextMenu={e => {
-                e.preventDefault();
-                setMenuFor(item.id);
-              }}
-            >
-              {iconFor(item)}
-              <div style={styles.rowMain}>
-                <div style={styles.rowName}>{item.name}</div>
-                <div style={styles.rowMeta}>
-                  {item.type === 'folder'
-                    ? 'Carpeta'
-                    : `${item.mimeType ?? 'Archivo'} · ${formatSize(item.size)}`}
-                </div>
-              </div>
-              <button
-                style={styles.menuBtn}
-                onClick={e => {
-                  e.stopPropagation();
+          <ListGroup>
+            {filtered.map((item, i) => (
+              <div
+                key={item.id}
+                style={styles.rowWrap}
+                onContextMenu={e => {
+                  e.preventDefault();
                   setMenuFor(menuFor === item.id ? null : item.id);
                 }}
-                aria-label="Opciones"
               >
-                <Trash2 size={16} color="#FF3B30" />
-              </button>
-              {menuFor === item.id && (
-                <div style={styles.menu}>
-                  {item.type === 'file' && isImageItem(item) && item.content && (
+                <ListRow
+                  chevron={false}
+                  showSeparator={i < filtered.length - 1}
+                  icon={iconFor(item)}
+                  iconBg={iconBg(item)}
+                  label={item.name}
+                  sublabel={item.type === 'folder' ? 'Carpeta' : `${item.mimeType ?? 'Archivo'} · ${formatSize(item.size)}`}
+                  onClick={() => open(item)}
+                  value={
+                    <span onClick={e => e.stopPropagation()}>
+                      <IconButton
+                        label="Opciones"
+                        size={30}
+                        bg="transparent"
+                        onClick={() => setMenuFor(menuFor === item.id ? null : item.id)}
+                      >
+                        <Trash2 size={16} color="var(--danger)" />
+                      </IconButton>
+                    </span>
+                  }
+                />
+                {menuFor === item.id && (
+                  <div style={styles.menu}>
+                    {item.type === 'file' && isImageItem(item) && item.content && (
+                      <button
+                        className="pressable"
+                        style={styles.menuAction}
+                        onClick={() => {
+                          useSystemStore.getState().setWallpaper(item.content!);
+                          setMenuFor(null);
+                        }}
+                      >
+                        <ImageIcon size={14} color="var(--accent)" /> Usar como fondo
+                      </button>
+                    )}
                     <button
-                      style={styles.menuAction}
-                      onClick={() => {
-                        useSystemStore.getState().setWallpaper(item.content!);
-                        setMenuFor(null);
-                      }}
+                      className="pressable"
+                      style={styles.menuItem}
+                      onClick={() => { void remove(item.id); setMenuFor(null); }}
                     >
-                      <ImageIcon size={14} color="#007AFF" /> Usar como fondo
+                      <Trash2 size={14} color="var(--danger)" /> Eliminar
                     </button>
-                  )}
-                  <button style={styles.menuItem} onClick={() => { remove(item.id); setMenuFor(null); }}>
-                    <Trash2 size={14} color="#FF3B30" /> Eliminar
-                  </button>
-                </div>
-              )}
-            </div>
-          ))
+                  </div>
+                )}
+              </div>
+            ))}
+          </ListGroup>
         )}
       </div>
 
-      <div style={styles.storageBar}>
+      <Card style={{ margin: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={styles.storageText}>
           <span>{formatSize(getUsed())} usados de {formatSize(getTotal())}</span>
           <span>{Math.max(0, Math.round(storageManager.getUsagePercent()))}%</span>
         </div>
-        <div style={styles.barTrack}>
-          <div
-            style={{
-              ...styles.barFill,
-              width: `${Math.min(100, storageManager.getUsagePercent())}%`,
-            }}
-          />
-        </div>
-      </div>
+        <ProgressBar value={Math.min(1, storageManager.getUsagePercent() / 100)} />
+      </Card>
 
       {preview && preview.content && (
         <div style={styles.lightbox} onClick={() => setPreview(null)}>
           <div style={styles.lbTop}>
             <span style={styles.lbName}>{preview.name}</span>
             <button
+              className="pressable"
               style={styles.lbAction}
               onClick={e => {
                 e.stopPropagation();
@@ -234,7 +252,7 @@ export default function FileManager() {
             >
               <ImageIcon size={16} color="#fff" /> Usar como fondo
             </button>
-            <button style={styles.lbClose} onClick={() => setPreview(null)} aria-label="Cerrar">
+            <button className="pressable" style={styles.lbClose} onClick={() => setPreview(null)} aria-label="Cerrar">
               X
             </button>
           </div>
@@ -243,61 +261,19 @@ export default function FileManager() {
           </div>
         </div>
       )}
-    </div>
+    </Screen>
   );
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  container: {
-    height: '100%',
-    display: 'flex',
-    flexDirection: 'column',
-    background: '#fff',
-  },
-  header: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '12px 14px 0',
-  },
-  title: { fontSize: 20, fontWeight: 700, color: '#111' },
-  headerBtns: { display: 'flex', gap: 6 },
-  iconBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    border: 'none',
-    background: 'rgba(0,122,255,0.1)',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  searchBox: {
-    margin: '10px 14px 6px',
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    background: '#F2F2F7',
-    borderRadius: 12,
-    padding: '0 12px',
-    height: 36,
-  },
-  searchInput: {
-    flex: 1,
-    border: 'none',
-    background: 'none',
-    outline: 'none',
-    fontSize: 13,
-    color: '#111',
-  },
   crumbs: {
     display: 'flex',
     alignItems: 'center',
     gap: 2,
-    padding: '4px 14px',
+    padding: '4px 14px 6px',
     overflowX: 'auto',
     flexWrap: 'nowrap' as const,
+    flexShrink: 0,
   },
   crumbBtn: {
     border: 'none',
@@ -312,8 +288,8 @@ const styles: Record<string, React.CSSProperties> = {
     background: 'none',
     cursor: 'pointer',
     padding: 4,
-    fontSize: 12,
-    color: '#007AFF',
+    fontSize: 13,
+    color: 'var(--accent)',
     whiteSpace: 'nowrap' as const,
   },
   upBtn: {
@@ -324,44 +300,24 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '6px 12px',
     borderRadius: 8,
     border: 'none',
-    background: 'rgba(0,122,255,0.08)',
-    color: '#007AFF',
+    background: 'rgba(0,122,255,0.10)',
+    color: 'var(--accent)',
     fontSize: 13,
     cursor: 'pointer',
     alignSelf: 'flex-start',
   },
-  list: { flex: 1, overflowY: 'auto', padding: '0 0 10px' },
-  row: {
-    display: 'flex',
-    alignItems: 'center',
-    padding: '10px 14px',
-    borderBottom: '0.5px solid rgba(0,0,0,0.05)',
-    cursor: 'pointer',
-    position: 'relative',
-  },
-  rowMain: { flex: 1, minWidth: 0 },
-  rowName: { fontSize: 14, color: '#111', fontWeight: 500 },
-  rowMeta: { fontSize: 11, color: '#8E8E93', marginTop: 2 },
-  menuBtn: {
-    border: 'none',
-    background: 'none',
-    cursor: 'pointer',
-    width: 30,
-    height: 30,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
+  list: { flex: 1, overflowY: 'auto', padding: '2px 0 14px' },
+  rowWrap: { position: 'relative' as const },
   menu: {
-    position: 'absolute',
-    right: 14,
-    top: 40,
-    background: '#fff',
+    position: 'absolute' as const,
+    right: 16,
+    top: 44,
+    background: 'var(--surface-card)',
     borderRadius: 10,
-    boxShadow: '0 4px 20px rgba(0,0,0,0.18)',
+    boxShadow: 'var(--shadow-lg)',
     padding: 6,
     zIndex: 20,
+    minWidth: 160,
   },
   menuItem: {
     display: 'flex',
@@ -371,39 +327,11 @@ const styles: Record<string, React.CSSProperties> = {
     background: 'none',
     padding: '8px 12px',
     fontSize: 13,
-    color: '#FF3B30',
+    color: 'var(--danger)',
     cursor: 'pointer',
     borderRadius: 6,
     width: '100%',
   },
-  storageBar: { padding: '10px 14px 14px', background: '#fff' },
-  storageText: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    fontSize: 11,
-    color: '#8E8E93',
-    marginBottom: 6,
-  },
-  barTrack: {
-    height: 4,
-    borderRadius: 2,
-    background: '#E5E5EA',
-    overflow: 'hidden',
-  },
-  barFill: {
-    height: '100%',
-    borderRadius: 2,
-    background: '#007AFF',
-  },
-  empty: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    height: '60%',
-  },
-  emptyText: { color: '#C7C7CC', fontSize: 13 },
   menuAction: {
     display: 'flex',
     alignItems: 'center',
@@ -412,10 +340,16 @@ const styles: Record<string, React.CSSProperties> = {
     background: 'none',
     padding: '8px 12px',
     fontSize: 13,
-    color: '#007AFF',
+    color: 'var(--accent)',
     cursor: 'pointer',
     borderRadius: 6,
     width: '100%',
+  },
+  storageText: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    fontSize: 12,
+    color: 'var(--text-secondary)',
   },
   lightbox: {
     position: 'absolute' as const,

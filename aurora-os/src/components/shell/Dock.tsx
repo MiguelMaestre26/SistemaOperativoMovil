@@ -1,5 +1,5 @@
 import { useAppStore } from '../../stores/useAppStore';
-import { Phone, MessageSquare, Globe, Music } from 'lucide-react';
+import { Phone, MessageSquare, Globe, Music, LayoutGrid } from 'lucide-react';
 
 const DOCK_APPS = [
   { id: 'phone', icon: <Phone size={22} color="#34C759" /> },
@@ -8,7 +8,11 @@ const DOCK_APPS = [
   { id: 'music', icon: <Music size={22} color="#FC5C7D" /> },
 ];
 
-export default function Dock() {
+interface DockProps {
+  onOpenDrawer: () => void;
+}
+
+export default function Dock({ onOpenDrawer }: DockProps) {
   const openApp = useAppStore(s => s.openApp);
   const openApps = useAppStore(s => s.openApps);
 
@@ -30,6 +34,14 @@ export default function Dock() {
             </div>
           );
         })}
+
+        <div style={styles.separator} />
+
+        <div style={styles.appItem} onClick={onOpenDrawer} aria-label="Todas las aplicaciones">
+          <div style={styles.appIcon}>
+            <LayoutGrid size={21} color="var(--text-primary)" />
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -38,7 +50,7 @@ export default function Dock() {
 const styles: Record<string, React.CSSProperties> = {
   container: {
     position: 'absolute',
-    bottom: 28,
+    bottom: 26,
     left: 0,
     right: 0,
     display: 'flex',
@@ -49,13 +61,14 @@ const styles: Record<string, React.CSSProperties> = {
   dock: {
     display: 'flex',
     alignItems: 'center',
-    gap: 20,
-    padding: '10px 20px',
-    borderRadius: 24,
-    background: 'rgba(255,255,255,0.2)',
-    backdropFilter: 'blur(20px)',
-    WebkitBackdropFilter: 'blur(20px)',
-    border: '1px solid rgba(255,255,255,0.15)',
+    gap: 18,
+    padding: '10px 18px',
+    borderRadius: 30,
+    background: 'var(--glass)',
+    backdropFilter: 'blur(22px) saturate(170%)',
+    WebkitBackdropFilter: 'blur(22px) saturate(170%)',
+    border: '1px solid var(--glass-border)',
+    boxShadow: 'var(--shadow-md)',
     pointerEvents: 'auto',
   },
   appItem: {
@@ -63,14 +76,15 @@ const styles: Record<string, React.CSSProperties> = {
     transition: 'transform 0.15s',
   },
   appIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 13,
-    background: 'rgba(255,255,255,0.15)',
+    width: 52,
+    height: 52,
+    borderRadius: 17,
+    background: 'var(--surface-container-high)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative' as const,
+    boxShadow: 'var(--shadow-sm)',
   },
   dot: {
     position: 'absolute' as const,
@@ -78,6 +92,11 @@ const styles: Record<string, React.CSSProperties> = {
     width: 5,
     height: 5,
     borderRadius: '50%',
-    background: 'rgba(255,255,255,0.6)',
+    background: 'var(--primary)',
+  },
+  separator: {
+    width: 1,
+    height: 30,
+    background: 'var(--outline-variant)',
   },
 };

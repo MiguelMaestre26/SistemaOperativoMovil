@@ -1,212 +1,233 @@
 import { useState, useEffect, useRef } from 'react';
-import { Play, Pause, SkipBack, SkipForward, Music2, Heart, Volume2 } from 'lucide-react';
-import { tonePlayer, parseMelody } from '../../../core/audio';
+import { Play, Pause, SkipBack, SkipForward, Search, X, Heart, Volume2, Music2, Loader2 } from 'lucide-react';
+import { searchSongs, artworkUrl, type ITunesSong } from '../../../core/streaming';
 import { usePersistedState } from '../../../core/persistence';
-
-interface Track {
-  id: string;
-  title: string;
-  genre: string;
-  bpm: number;
-  melody: string[];
-  duration: number;
-}
-
-function makeTracks(): Track[] {
-  const defs: Array<[string, string, number, string[]]> = [
-    ['Amanecer', 'Chill Pop', 92, ['C4', 'E4', 'G4', 'A4', 'G4', 'E4', 'D4', 'E4', 'C4', 'E4', 'G4', 'B4', 'A4', 'G4', 'E4', 'D4']],
-    ['Neones', 'Synthwave', 110, ['A3', 'C4', 'E4', 'A4', 'G4', 'E4', 'C4', 'A3', 'D4', 'F4', 'A4', 'C5', 'B4', 'A4', 'F4', 'D4']],
-    ['Bosque', 'Ambient', 70, ['E3', 'A3', 'C4', 'E4', 'D4', 'C4', 'A3', 'G3', 'F3', 'A3', 'C4', 'F4', 'E4', 'C4', 'A3', 'G3']],
-    ['Ritmo', 'House', 124, ['F3', 'A3', 'C4', 'F4', 'E4', 'C4', 'A3', 'F3', 'G3', 'B3', 'D4', 'G4', 'F4', 'D4', 'B3', 'G3']],
-    ['Estrellas', 'Balada', 78, ['C4', 'E4', 'G4', 'C5', 'B4', 'G4', 'E4', 'D4', 'A3', 'C4', 'E4', 'A4', 'G4', 'E4', 'D4', 'C4']],
-    ['Frecuencia', 'Electrónica', 132, ['A3', 'A3', 'C4', 'E4', 'A4', 'A4', 'G4', 'E4', 'D4', 'D4', 'F4', 'A4', 'C5', 'C5', 'B4', 'A4']],
-  ];
-  return defs.map(([title, genre, bpm, melody]) => ({
-    id: title.toLowerCase().replace(/\s/g, '-'),
-    title,
-    genre,
-    bpm,
-    melody,
-    duration: Math.round(melody.length * (60 / bpm)),
-  }));
-}
+import { Screen, AppHeader, EmptyState } from '../../ui';
 
 export default function Music() {
-  const tracksRef = useRef<Track[]>(makeTracks());
-  const tracks = tracksRef.current;
-  const [liked, setLiked] = usePersistedState<string[]>('music:liked', []);
-  const [currentId, setCurrentId] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [songs, setSongs] = useState<ITunesSong[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [current, setCurrent] = useState<ITunesSong | null>(null);
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [total, setTotal] = useState(1);
+  const [duration, setDuration] = useState(0);
+  const [liked, setLiked] = usePersistedState<string[]>('music:liked2', []);
   const [volume, setVolume] = usePersistedState<number>('music:volume', 0.7);
-
-  const current = tracks.find(t => t.id === currentId) ?? null;
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const songsRef = useRef<ITunesSong[]>([]);
+  songsRef.current = songs;
 
   useEffect(() => {
-    tonePlayer.onProgress = (pos, tot) => {
-      setProgress(pos);
-      setTotal(tot);
-      if (currentId && pos >= tot - 0.25 && tonePlayer.playing) {
-        const cur = tracksRef.current.find(x => x.id === currentId);
-        if (cur) {
-          const idx = tracksRef.current.findIndex(x => x.id === cur.id);
-          const nxt = tracksRef.current[(idx + 1) % tracksRef.current.length];
-          tonePlayer.stop();
-          tonePlayer.setTempo(nxt.bpm);
-          tonePlayer.load(parseMelody(nxt.melody));
-          tonePlayer.resume();
-          setCurrentId(nxt.id);
-          setProgress(0);
-          setTotal(tonePlayer.getTotal());
-        }
-      }
+    const a = new Audio();
+    audioRef.current = a;
+    const onTime = () => {
+      setProgress(a.currentTime);
+      setDuration(Number.isFinite(a.duration) ? a.duration : 0);
     };
+    const onEnd = () => {
+      setPlaying(false);
+      setProgress(0);
+      const idx = songsRef.current.findIndex(s => current?.trackId === s.trackId);
+      const nxt = songsRef.current[idx + 1];
+      if (nxt) void play(nxt);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    };
+    a.addEventListener('timeupdate', onTime);
+    a.addEventListener('loadedmetadata', onTime);
+    a.addEventListener('ended', onEnd);
+    a.addEventListener('play', () => setPlaying(true));
+    a.addEventListener('pause', () => setPlaying(false));
+    a.addEventListener('error', () => setPlaying(false));
     return () => {
-      tonePlayer.pause();
-      tonePlayer.onProgress = null;
+      a.pause();
+      a.removeAttribute('src');
+      audioRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentId]);
+  }, []);
 
   useEffect(() => {
-    setPlaying(tonePlayer.playing);
-  }, [playing]);
+    if (!query.trim()) {
+      setSongs([]);
+      return;
+    }
+    setLoading(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await searchSongs(query.trim());
+        setSongs(res);
+      } catch {
+        setSongs([]);
+      }
+      setLoading(false);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [query]);
 
-  const playTrack = (id: string) => {
-    const t = tracks.find(x => x.id === id);
-    if (!t) return;
-    setCurrentId(id);
-    tonePlayer.setTempo(t.bpm);
-    tonePlayer.load(parseMelody(t.melody));
-    tonePlayer.setVolume(volume);
-    tonePlayer.resume();
-    setProgress(0);
-    setTotal(tonePlayer.getTotal());
-    setPlaying(true);
+  const play = async (s: ITunesSong) => {
+    setCurrent(s);
+    const a = audioRef.current;
+    if (!a) return;
+    if (!s.previewUrl) {
+      setPlaying(false);
+      return;
+    }
+    a.src = s.previewUrl;
+    a.volume = volume;
+    try {
+      await a.play();
+    } catch {
+      setPlaying(false);
+    }
   };
 
   const toggle = () => {
-    if (!current) {
-      playTrack(tracks[0]?.id);
-      return;
-    }
-    tonePlayer.toggle();
-    setPlaying(tonePlayer.playing);
+    const a = audioRef.current;
+    if (!a || !current) return;
+    if (a.paused) void a.play();
+    else a.pause();
   };
 
-  const next = () => {
-    if (!current) return;
-    const idx = tracks.findIndex(t => t.id === current.id);
-    playTrack(tracks[(idx + 1) % tracks.length].id);
+  const step = (dir: 1 | -1) => {
+    if (songs.length === 0) return;
+    const idx = songs.findIndex(s => s.trackId === current?.trackId);
+    const next = songs[(idx + dir + songs.length) % songs.length];
+    void play(next);
   };
 
-  const prev = () => {
-    if (tonePlayer.getPosition() > 3) {
-      tonePlayer.seek(0);
-      return;
-    }
-    if (!current) return;
-    const idx = tracks.findIndex(t => t.id === current.id);
-    playTrack(tracks[(idx - 1 + tracks.length) % tracks.length].id);
-  };
-
-  const toggleLiked = (id: string) => {
-    setLiked(ls => (ls.includes(id) ? ls.filter(x => x !== id) : [...ls, id]));
+  const toggleLiked = (id: number) => {
+    setLiked(ls => (ls.includes(String(id)) ? ls.filter(x => x !== String(id)) : [...ls, String(id)]));
   };
 
   const onSeek = (v: number) => {
-    tonePlayer.seek(v);
+    const a = audioRef.current;
+    if (!a) return;
+    a.currentTime = v;
     setProgress(v);
   };
 
   return (
-    <div style={styles.container}>
-      <div style={styles.header}>
-        <span style={styles.title}>Música</span>
+    <Screen scroll={false} padding="0">
+      <AppHeader title="Música" />
+
+      <div style={styles.searchRow}>
+        <div className="pressable" style={styles.searchBox}>
+          <Search size={16} color="var(--text-secondary)" />
+          <input
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Buscar canciones…"
+            style={styles.searchInput}
+          />
+          {query && (
+            <button style={styles.clearBtn} onClick={() => setQuery('')} aria-label="Limpiar">
+              <X size={14} color="var(--text-secondary)" />
+            </button>
+          )}
+        </div>
       </div>
 
       <div style={styles.library}>
-        {tracks.map(t => (
-          <button
-            key={t.id}
-            style={{ ...styles.track, ...(t.id === currentId ? styles.trackActive : {}) }}
-            onClick={() => (currentId === t.id ? toggle() : playTrack(t.id))}
-          >
-            <div style={styles.albumArt}>
-              {currentId === t.id && playing ? (
-                <span style={styles.eq}>
-                  <span style={styles.eqBar} /><span style={{ ...styles.eqBar, animationDelay: '0.2s' }} /><span style={{ ...styles.eqBar, animationDelay: '0.4s' }} />
+        {loading ? (
+          <div style={styles.centerBox}>
+            <Loader2 size={26} color="var(--accent)" className="spin" />
+            <span style={styles.centerText}>Buscando en iTunes…</span>
+          </div>
+        ) : query && songs.length === 0 ? (
+          <EmptyState icon={<Music2 size={28} color="var(--text-secondary)" />} title="Sin resultados" />
+        ) : !query ? (
+          <EmptyState
+            icon={<Music2 size={28} color="var(--text-secondary)" />}
+            title="Busca una canción"
+            subtitle="Escribe un artista o tema para reproducir su preview"
+          />
+        ) : (
+          songs.map(s => {
+            const active = s.trackId === current?.trackId;
+            return (
+              <button
+                key={s.trackId}
+                className="pressable"
+                style={{ ...styles.track, ...(active ? styles.trackActive : {}) }}
+                onClick={() => (active ? toggle() : void play(s))}
+              >
+                <div style={styles.albumArt}>
+                  {s.artworkUrl100 ? (
+                    <img src={artworkUrl(s.artworkUrl100)} alt="" className="no-invert" style={styles.artImg} />
+                  ) : (
+                    <Music2 size={16} color="#fff" />
+                  )}
+                </div>
+                <div style={styles.trackMain}>
+                  <div style={{ ...styles.trackTitle, color: active ? 'var(--accent)' : 'var(--text-primary)' }}>
+                    {s.trackName}
+                  </div>
+                  <div style={styles.trackMeta}>{s.artistName} · {s.collectionName}</div>
+                </div>
+                <span
+                  role="button"
+                  tabIndex={0}
+                  style={styles.heart}
+                  onClick={e => { e.stopPropagation(); toggleLiked(s.trackId); }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.stopPropagation();
+                      toggleLiked(s.trackId);
+                    }
+                  }}
+                >
+                  <Heart
+                    size={17}
+                    color={liked.includes(String(s.trackId)) ? '#FF2D55' : 'var(--text-tertiary)'}
+                    fill={liked.includes(String(s.trackId)) ? '#FF2D55' : 'none'}
+                  />
                 </span>
-              ) : t.id === currentId ? (
-                <Pause size={16} color="#fff" />
-              ) : (
-                <Music2 size={16} color="#fff" />
-              )}
-            </div>
-            <div style={styles.trackMain}>
-              <div style={styles.trackTitle}>{t.title}</div>
-              <div style={styles.trackMeta}>{t.genre} · {t.bpm} bpm · {t.duration}s</div>
-            </div>
-            <span
-              role="button"
-              tabIndex={0}
-              style={styles.heart}
-              onClick={e => { e.stopPropagation(); toggleLiked(t.id); }}
-              onKeyDown={e => {
-                if (e.key === 'Enter') {
-                  e.stopPropagation();
-                  toggleLiked(t.id);
-                }
-              }}
-            >
-              <Heart size={17} color={liked.includes(t.id) ? '#FF2D55' : '#D1D1D6'} fill={liked.includes(t.id) ? '#FF2D55' : 'none'} />
-            </span>
-          </button>
-        ))}
+              </button>
+            );
+          })
+        )}
       </div>
 
       <div style={styles.nowPlaying}>
         <div style={styles.artLarge}>
-          {current ? (
-            <span style={styles.eq}>
-              <span style={styles.eqBar} /><span style={{ ...styles.eqBar, animationDelay: '0.2s' }} /><span style={{ ...styles.eqBar, animationDelay: '0.4s' }} />
-            </span>
+          {current?.artworkUrl100 ? (
+            <img src={artworkUrl(current.artworkUrl100)} alt="" className="no-invert" style={styles.artImgLarge} />
           ) : (
             <Music2 size={20} color="#fff" />
           )}
         </div>
         <div style={styles.nowMain}>
-          <div style={styles.nowTitle}>{current?.title ?? 'Sin reproducir'}</div>
-          <div style={styles.nowMeta}>{current ? `${current.genre} · ${current.bpm} bpm` : 'Toca una canción para empezar'}</div>
+          <div style={styles.nowTitle}>{current?.trackName ?? 'Sin reproducir'}</div>
+          <div style={styles.nowMeta}>{current ? `${current.artistName} · Preview` : 'Busca y toca una canción'}</div>
           <div style={styles.sliderWrap}>
             <input
               type="range"
               min={0}
-              max={total}
-              value={Math.min(progress, total)}
+              max={duration || 1}
+              value={Math.min(progress, duration || 1)}
               onChange={e => onSeek(Number(e.target.value))}
               style={styles.slider}
               disabled={!current}
             />
             <div style={styles.times}>
               <span>{fmt(progress)}</span>
-              <span>{fmt(total)}</span>
+              <span>{fmt(duration)}</span>
             </div>
           </div>
           <div style={styles.controls}>
-            <button style={styles.ctl} onClick={prev} aria-label="Anterior">
-              <SkipBack size={22} color="#111" />
+            <button style={styles.ctl} onClick={() => step(-1)} aria-label="Anterior">
+              <SkipBack size={22} color="var(--text-primary)" />
             </button>
             <button style={styles.playBtn} onClick={toggle} aria-label="Reproducir/pausar">
               {playing ? <Pause size={26} color="#fff" /> : <Play size={26} color="#fff" style={{ marginLeft: 3 }} />}
             </button>
-            <button style={styles.ctl} onClick={next} aria-label="Siguiente">
-              <SkipForward size={22} color="#111" />
+            <button style={styles.ctl} onClick={() => step(1)} aria-label="Siguiente">
+              <SkipForward size={22} color="var(--text-primary)" />
             </button>
           </div>
           <div style={styles.volRow}>
-            <Volume2 size={15} color="#8E8E93" />
+            <Volume2 size={15} color="var(--text-secondary)" />
             <input
               type="range"
               min={0}
@@ -216,102 +237,101 @@ export default function Music() {
               onChange={e => {
                 const v = Number(e.target.value);
                 setVolume(v);
-                tonePlayer.setVolume(v);
+                if (audioRef.current) audioRef.current.volume = v;
               }}
               style={styles.slider}
             />
           </div>
         </div>
       </div>
-    </div>
+    </Screen>
   );
 }
 
 function fmt(sec: number): string {
+  if (!Number.isFinite(sec)) return '0:00';
   const m = Math.floor(sec / 60);
   const s = Math.floor(sec % 60);
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  container: {
-    height: '100%',
+  searchRow: { width: '100%', boxSizing: 'border-box' as const, padding: '8px 16px', flexShrink: 0 },
+  searchBox: {
+    height: 38,
+    borderRadius: 12,
+    background: 'var(--surface-input)',
     display: 'flex',
-    flexDirection: 'column',
-    background: '#fff',
+    alignItems: 'center',
+    gap: 8,
+    padding: '0 14px',
   },
-  header: {
-    padding: '12px 16px 6px',
-  },
-  title: { fontSize: 22, fontWeight: 700, color: '#111' },
-  library: { flex: 1, overflowY: 'auto', padding: '4px 16px' },
+  searchInput: { flex: 1, border: 'none', outline: 'none', fontSize: 15, color: 'var(--text-primary)', background: 'none' },
+  clearBtn: { border: 'none', background: 'none', cursor: 'pointer' },
+  library: { flex: 1, overflowY: 'auto', padding: '0 16px', display: 'flex', flexDirection: 'column' },
+  centerBox: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '60px 0', textAlign: 'center' as const },
+  centerText: { fontSize: 13, color: 'var(--text-secondary)' },
   track: {
     width: '100%',
     display: 'flex',
     alignItems: 'center',
     gap: 12,
-    padding: '9px 0',
+    padding: '9px 10px',
     border: 'none',
     background: 'none',
     cursor: 'pointer',
     textAlign: 'left' as const,
-    borderBottom: '0.5px solid rgba(0,0,0,0.05)',
+    borderRadius: 14,
+    borderBottom: '0.5px solid var(--separator-cell)',
   },
-  trackActive: {},
+  trackActive: {
+    background: 'var(--bg-tertiary)',
+    borderRadius: 14,
+    borderBottomColor: 'transparent',
+    marginTop: -1,
+  },
   albumArt: {
-    width: 44,
-    height: 44,
+    width: 46,
+    height: 46,
     borderRadius: 10,
-    background: 'linear-gradient(135deg, #007AFF, #5AC8FA)',
+    background: 'linear-gradient(135deg, var(--primary), #5AC8FA)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
+    overflow: 'hidden',
   },
+  artImg: { width: '100%', height: '100%', objectFit: 'cover' as const },
+  artImgLarge: { width: '100%', height: '100%', objectFit: 'cover' as const, borderRadius: 14 },
   trackMain: { flex: 1, minWidth: 0 },
-  trackTitle: { fontSize: 15, fontWeight: 600, color: '#111' },
-  trackMeta: { fontSize: 12, color: '#8E8E93', marginTop: 2 },
+  trackTitle: { fontSize: 15, fontWeight: 600 },
+  trackMeta: { fontSize: 12, color: 'var(--text-secondary)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const },
   heart: { cursor: 'pointer', padding: 6, display: 'flex' },
   nowPlaying: {
     display: 'flex',
     gap: 14,
     padding: '14px 16px 18px',
-    background: '#F7F7F9',
-    borderTop: '0.5px solid rgba(0,0,0,0.08)',
+    background: 'var(--surface-card)',
+    borderTop: '0.5px solid var(--separator-cell)',
   },
   artLarge: {
     width: 56,
     height: 56,
     borderRadius: 14,
-    background: 'linear-gradient(135deg, #5856D6, #007AFF)',
+    background: 'linear-gradient(135deg, var(--tertiary), var(--primary))',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
+    overflow: 'hidden',
   },
   nowMain: { flex: 1, minWidth: 0 },
-  nowTitle: { fontSize: 15, fontWeight: 700, color: '#111' },
-  nowMeta: { fontSize: 11, color: '#8E8E93', marginTop: 2 },
+  nowTitle: { fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' },
+  nowMeta: { fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 },
   sliderWrap: { marginTop: 8 },
-  slider: {
-    width: '100%',
-    accentColor: '#007AFF',
-    height: 4,
-  },
-  times: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    fontSize: 10,
-    color: '#8E8E93',
-    marginTop: 2,
-  },
-  controls: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 22,
-    marginTop: 8,
-  },
+  slider: { width: '100%', accentColor: 'var(--primary)', height: 4 },
+  times: { display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-secondary)', marginTop: 2 },
+  controls: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 22, marginTop: 8 },
   ctl: {
     width: 38,
     height: 38,
@@ -328,25 +348,12 @@ const styles: Record<string, React.CSSProperties> = {
     height: 52,
     borderRadius: 26,
     border: 'none',
-    background: '#007AFF',
+    background: 'var(--accent)',
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0 4px 12px rgba(0,122,255,0.35)',
+    boxShadow: 'var(--shadow-md)',
   },
-  volRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 10,
-  },
-  eq: { display: 'flex', gap: 2, alignItems: 'flex-end', height: 16 },
-  eqBar: {
-    width: 3,
-    height: 16,
-    borderRadius: 1,
-    background: '#fff',
-    animation: 'blink 0.9s infinite ease-in-out',
-  },
+  volRow: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 },
 };

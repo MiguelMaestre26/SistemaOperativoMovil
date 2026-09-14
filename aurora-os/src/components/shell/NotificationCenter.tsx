@@ -1,20 +1,25 @@
 import { useState, useEffect } from 'react';
 import { notificationService } from '../../core/NotificationService';
 import type { SystemNotification } from '../../core/NotificationService';
+import { screenCaptureService, saveRecordingToGallery } from '../../core/ScreenCapture';
 import { useSystemStore } from '../../stores/useSystemStore';
+import { useMediaStore } from '../../stores/useMediaStore';
 import { motion } from 'framer-motion';
-import { X, Bell, Trash2 } from 'lucide-react';
+import { X, Bell, Trash2, Camera, Video, Square } from 'lucide-react';
+import { toast } from '../ui/Toast';
 
 interface NotificationCenterProps {
   onClose: () => void;
 }
 
 export default function NotificationCenter({ onClose }: NotificationCenterProps) {
-  const [notifications, setNotifications] = useState<SystemNotification[]>([]);
+  const [notifications, setNotifications] = useState<SystemNotification[]>(() => notificationService.getAll());
+  const [recording, setRecording] = useState(false);
+  const addPhoto = useMediaStore(s => s.addPhoto);
   const { brightness, setBrightness, isWifiOn, setWifi, isBluetoothOn, setBluetooth, isDoNotDisturb, setDoNotDisturb } = useSystemStore();
 
   useEffect(() => {
-    setNotifications(notificationService.getAll());
+    return screenCaptureService.subscribe(setRecording);
   }, []);
 
   const dismiss = (id: string) => {
@@ -25,6 +30,33 @@ export default function NotificationCenter({ onClose }: NotificationCenterProps)
   const clearAll = () => {
     notificationService.clearAll();
     setNotifications([]);
+  };
+
+  const wait = (ms: number) => new Promise(res => setTimeout(res, ms));
+
+  const handleScreenshot = async () => {
+    onClose();
+    await wait(260);
+    try {
+      const uri = await screenCaptureService.takeScreenshot();
+      const label = new Date().toLocaleString('es', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+      addPhoto(uri, `Captura ${label}`);
+      toast('Captura guardada en Fotos');
+      notificationService.push('gallery', 'Captura de pantalla', 'Disponible en la app Fotos.');
+    } catch {
+      toast('No se pudo tomar la captura');
+    }
+  };
+
+  const handleRecord = async () => {
+    if (recording) {
+      const result = await screenCaptureService.stopRecording();
+      if (result) saveRecordingToGallery(result);
+      return;
+    }
+    await screenCaptureService.startRecording();
+    onClose();
+    toast('Grabación de pantalla iniciada · toca REC para detener');
   };
 
   return (
@@ -40,19 +72,43 @@ export default function NotificationCenter({ onClose }: NotificationCenterProps)
         {/* Quick toggles */}
         <div style={styles.togglesGrid}>
           {[
-            { label: 'Wi-Fi', value: isWifiOn, toggle: () => setWifi(!isWifiOn), color: isWifiOn ? 'var(--accent)' : 'var(--bg-tertiary)' },
-            { label: 'Bluetooth', value: isBluetoothOn, toggle: () => setBluetooth(!isBluetoothOn), color: isBluetoothOn ? 'var(--accent)' : 'var(--bg-tertiary)' },
-            { label: 'DND', value: isDoNotDisturb, toggle: () => setDoNotDisturb(!isDoNotDisturb), color: isDoNotDisturb ? 'var(--warning)' : 'var(--bg-tertiary)' },
+            { label: 'Wi-Fi', value: isWifiOn, toggle: () => setWifi(!isWifiOn), color: isWifiOn ? 'var(--primary)' : 'var(--surface-container-highest)', text: isWifiOn ? 'var(--on-primary)' : 'var(--on-surface-variant)' },
+            { label: 'Bluetooth', value: isBluetoothOn, toggle: () => setBluetooth(!isBluetoothOn), color: isBluetoothOn ? 'var(--primary)' : 'var(--surface-container-highest)', text: isBluetoothOn ? 'var(--on-primary)' : 'var(--on-surface-variant)' },
+            { label: 'DND', value: isDoNotDisturb, toggle: () => setDoNotDisturb(!isDoNotDisturb), color: isDoNotDisturb ? 'var(--error)' : 'var(--surface-container-highest)', text: isDoNotDisturb ? 'var(--on-error)' : 'var(--on-surface-variant)' },
           ].map(t => (
             <button key={t.label} onClick={t.toggle} style={{
               ...styles.toggleBtn,
               background: t.color,
             }}>
-              <div style={{ fontSize: 11, color: t.value ? '#fff' : 'var(--text-primary)', fontWeight: 500 }}>
+              <div style={{ fontSize: 12, color: t.text, fontWeight: 600 }}>
                 {t.label}
               </div>
             </button>
           ))}
+        </div>
+
+        {/* Captura de pantalla */}
+        <div style={styles.captureSection}>
+          <button onClick={handleScreenshot} style={styles.captureBtn}>
+            <span style={styles.captureIcon}>
+              <Camera size={18} color="var(--on-primary)" />
+            </span>
+            <span style={styles.captureLabel}>Screenshot</span>
+          </button>
+          <button
+            onClick={handleRecord}
+            style={{
+              ...styles.captureBtn,
+              background: recording ? 'var(--error)' : 'var(--surface-container-highest)',
+            }}
+          >
+            <span style={recording ? styles.captureIconActive : styles.captureIcon}>
+              {recording ? <Square size={16} color="#fff" fill="#fff" /> : <Video size={18} color={recording ? '#fff' : 'var(--on-primary)'} />}
+            </span>
+            <span style={{ ...styles.captureLabel, color: recording ? '#fff' : 'var(--text-primary)' }}>
+              {recording ? 'Detener' : 'Grabar'}
+            </span>
+          </button>
         </div>
 
         {/* Brightness */}
@@ -116,17 +172,18 @@ export default function NotificationCenter({ onClose }: NotificationCenterProps)
 
 const styles: Record<string, React.CSSProperties> = {
   overlay: {
-    position: 'fixed',
+    position: 'absolute',
     inset: 0,
     background: 'rgba(0,0,0,0.4)',
     zIndex: 9600,
+    borderRadius: 46,
     display: 'flex',
     flexDirection: 'column',
   },
   panel: {
     marginTop: 50,
     margin: '50px 8px 0',
-    maxHeight: 'calc(100vh - 100px)',
+    maxHeight: 'calc(100% - 100px)',
     overflowY: 'auto',
     display: 'flex',
     flexDirection: 'column',
@@ -137,26 +194,68 @@ const styles: Record<string, React.CSSProperties> = {
     gridTemplateColumns: 'repeat(3, 1fr)',
     gap: 8,
     padding: 16,
-    borderRadius: 16,
-    background: 'var(--glass)',
-    backdropFilter: 'blur(20px)',
-    WebkitBackdropFilter: 'blur(20px)',
-    border: '1px solid var(--glass-border)',
+    borderRadius: 24,
+    background: 'var(--surface-container-high)',
+    boxShadow: 'var(--shadow-md)',
+    border: '1px solid var(--outline-variant)',
   },
   toggleBtn: {
     border: 'none',
-    borderRadius: 12,
-    padding: '12px 8px',
+    borderRadius: 14,
+    padding: '13px 8px',
     cursor: 'pointer',
     textAlign: 'center' as const,
   },
   brightnessSection: {
     padding: 14,
+    borderRadius: 24,
+    background: 'var(--surface-container-high)',
+    boxShadow: 'var(--shadow-md)',
+    border: '1px solid var(--outline-variant)',
+  },
+  captureSection: {
+    padding: 12,
+    borderRadius: 24,
+    background: 'var(--surface-container-high)',
+    boxShadow: 'var(--shadow-md)',
+    border: '1px solid var(--outline-variant)',
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, 1fr)',
+    gap: 8,
+  },
+  captureBtn: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 6,
+    border: 'none',
     borderRadius: 16,
-    background: 'var(--glass)',
-    backdropFilter: 'blur(20px)',
-    WebkitBackdropFilter: 'blur(20px)',
-    border: '1px solid var(--glass-border)',
+    padding: '14px 8px',
+    cursor: 'pointer',
+    background: 'var(--surface-container-highest)',
+  },
+  captureIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: 'var(--primary)',
+  },
+  captureIconActive: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: 'var(--error)',
+  },
+  captureLabel: {
+    fontSize: 12,
+    fontWeight: 600,
+    color: 'var(--text-secondary)',
   },
   brightnessHeader: {
     display: 'flex',
@@ -175,16 +274,15 @@ const styles: Record<string, React.CSSProperties> = {
   },
   slider: {
     width: '100%',
-    accentColor: 'var(--accent)',
+    accentColor: 'var(--primary)',
     height: 4,
   },
   notifSection: {
     padding: 14,
-    borderRadius: 16,
-    background: 'var(--glass)',
-    backdropFilter: 'blur(20px)',
-    WebkitBackdropFilter: 'blur(20px)',
-    border: '1px solid var(--glass-border)',
+    borderRadius: 24,
+    background: 'var(--surface-container)',
+    boxShadow: 'var(--shadow-md)',
+    border: '1px solid var(--outline-variant)',
   },
   notifHeader: {
     display: 'flex',
@@ -219,8 +317,8 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 8,
   },
   notifItem: {
-    background: 'var(--bg-tertiary)',
-    borderRadius: 10,
+    background: 'var(--surface-container-high)',
+    borderRadius: 14,
     padding: '10px 12px',
     display: 'flex',
     justifyContent: 'space-between',

@@ -93,17 +93,17 @@ export default function CameraApp() {
         {flashFx && <div style={styles.flashFx} />}
 
         <div style={styles.topBar}>
-          <button style={styles.iconBtn} onClick={() => setFlash(v => !v)} aria-label="Flash">
+          <button className="pressable" style={styles.iconBtn} onClick={() => setFlash(v => !v)} aria-label="Flash">
             {flash ? <Zap size={20} color="#FFD700" /> : <ZapOff size={20} color="#fff" />}
           </button>
-          <button style={styles.iconBtn} onClick={switchCamera} aria-label="Cambiar cámara">
+          <button className="pressable" style={styles.iconBtn} onClick={switchCamera} aria-label="Cambiar cámara">
             <RefreshCw size={20} color="#fff" />
           </button>
         </div>
       </div>
 
       <div style={styles.controls}>
-        <button style={styles.shutter} onClick={capture} aria-label="Capturar" />
+        <button className="pressable" style={styles.shutter} onClick={capture} aria-label="Capturar" />
       </div>
 
       {photos.length > 0 && (
@@ -113,6 +113,7 @@ export default function CameraApp() {
               key={p.id}
               src={p.uri}
               alt={p.caption}
+              className="no-invert"
               style={{
                 ...styles.thumb,
                 background: /^#/.test(p.uri) ? p.uri : undefined,
