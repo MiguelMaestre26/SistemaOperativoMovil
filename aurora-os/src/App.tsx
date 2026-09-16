@@ -57,6 +57,7 @@ import Snake from './components/apps/Snake';
 import UjapEnLinea from './components/apps/UjapEnLinea';
 import AcropolisUjap from './components/apps/AcropolisUjap';
 import GeometryDash from './components/apps/GeometryDash';
+import PdfViewer from './components/apps/PdfViewer';
 
 const APP_COMPONENTS: Record<string, React.ComponentType> = {
   calculator: Calculator,
@@ -94,6 +95,7 @@ const APP_COMPONENTS: Record<string, React.ComponentType> = {
   'ujap-en-linea': UjapEnLinea,
   'acropolis-ujap': AcropolisUjap,
   'geometry-dash': GeometryDash,
+  'pdf-viewer': PdfViewer,
 };
 
 function AppView({ appId }: { appId: string }) {

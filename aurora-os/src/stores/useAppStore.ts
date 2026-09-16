@@ -31,6 +31,7 @@ const APP_MEMORY: Record<string, number> = {
   snake: 64,
   'ujap-en-linea': 180, 'acropolis-ujap': 180,
   'geometry-dash': 220,
+  'pdf-viewer': 160,
 };
 
 export const useAppStore = create<AppStore>((set, get) => ({

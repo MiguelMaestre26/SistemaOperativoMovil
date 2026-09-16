@@ -3,6 +3,7 @@ import type { CSSProperties, ReactNode } from 'react';
 interface ScreenProps {
   children: ReactNode;
   scroll?: boolean;
+  scrollX?: boolean;
   padding?: string;
   style?: CSSProperties;
   className?: string;
@@ -12,6 +13,7 @@ interface ScreenProps {
 export default function Screen({
   children,
   scroll = true,
+  scrollX = false,
   padding = '0 0 24px',
   style,
   className = '',
@@ -26,7 +28,7 @@ export default function Screen({
         flexDirection: 'column',
         minHeight: 0,
         overflowY: scroll ? 'auto' : 'hidden',
-        overflowX: 'hidden',
+        overflowX: scrollX !== false ? 'auto' : 'hidden',
         background: bg,
         padding,
         WebkitOverflowScrolling: 'touch',

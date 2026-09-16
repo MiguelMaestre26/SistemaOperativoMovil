@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { storageManager, type StorageItem } from '../../../core/StorageManager';
 import { isImageItem } from '../../../core/downloads';
+import { isPdfItem, openPdf } from '../../../core/pdfSession';
 import { notificationService } from '../../../core/NotificationService';
 import { useSystemStore } from '../../../stores/useSystemStore';
 import {
@@ -78,6 +79,10 @@ export default function FileManager() {
     }
     if (isImageItem(item) && item.content) {
       setPreview(item);
+      return;
+    }
+    if (isPdfItem(item)) {
+      openPdf(item);
       return;
     }
     notificationService.push('file-manager', item.name, `Archivo ${item.mimeType ?? ''} (sin visor).`.trim());

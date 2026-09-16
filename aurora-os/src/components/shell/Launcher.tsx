@@ -6,7 +6,7 @@ import {
   CloudSun, Music, Mail, Bot, ShoppingBag,
   Calendar, Map, Radio, BookOpen, Video,
   Compass, Newspaper, Heart, Gamepad2,
-  Send, MessageCircle
+  Send, MessageCircle, FileBadge
 } from 'lucide-react';
 import type { AppDefinition } from '../../types';
 
@@ -46,6 +46,7 @@ const ALL_APPS: AppDefinition[] = [
   { id: 'ujap-en-linea', name: 'UJAP En Línea', icon: 'ujap', color: '#C62828', category: 'utilities' },
   { id: 'acropolis-ujap', name: 'Acropolis UJAP', icon: 'acropolis', color: '#8E0000', category: 'utilities' },
   { id: 'geometry-dash', name: 'Geometry Dash', icon: 'geometrydash', color: '#FFD60A', category: 'media' },
+  { id: 'pdf-viewer', name: 'PDF Viewer', icon: 'pdf', color: '#FF3B30', category: 'utilities' },
 ];
 
 function getAppIcon(icon: string, size = 24) {
@@ -86,6 +87,7 @@ function getAppIcon(icon: string, size = 24) {
     ujap: <UjapIcon size={s} />,
     acropolis: <AcropolisIcon size={s} />,
     geometrydash: <GeometryDashIcon size={s} />,
+    pdf: <FileBadge size={s} color="#fff" />,
     store: <ShoppingBag size={s} color="#fff" />,
   };
   return icons[icon] || <ShoppingBag size={s} color="#fff" />;
