@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { ExternalLink } from 'lucide-react';
+import { openInOs } from '../../core/browserSession';
 import { openExternal } from '../../core/webapp';
 
 interface LinkAppLaunchProps {
@@ -21,7 +22,7 @@ export default function LinkAppLaunch({
   accent = '#1c1c1e',
 }: LinkAppLaunchProps) {
   useEffect(() => {
-    const t = setTimeout(() => openExternal(url), 150);
+    const t = setTimeout(() => openInOs(url), 150);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url]);
@@ -53,7 +54,7 @@ export default function LinkAppLaunch({
         <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.85)', lineHeight: 1.5, marginTop: 6 }}>{subtitle}</div>
       )}
       <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 18 }}>
-        La página se abrió en una pestaña nueva.
+        Abriendo en el navegador del sistema…
       </div>
       <button
         className="pressable"
@@ -77,7 +78,7 @@ export default function LinkAppLaunch({
         }}
       >
         <ExternalLink size={18} color="#fff" />
-        <span>Reabrir {title}</span>
+        <span>Abrir en una pestaña nueva</span>
       </button>
     </div>
   );

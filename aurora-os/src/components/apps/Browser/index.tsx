@@ -20,8 +20,14 @@ function looksLikeUrl(raw: string): boolean {
 }
 
 export default function Browser() {
-  const [url, setUrl] = useState('home');
-  const [history, setHistory] = useState<string[]>(['home']);
+  const [initialUrl] = useState(() => {
+    if (isNative()) return 'home';
+    const q = consumePendingSearch();
+    if (q) return googleSearchUrl(q);
+    return consumePendingUrl() ?? 'home';
+  });
+  const [url, setUrl] = useState(initialUrl);
+  const [history, setHistory] = useState<string[]>([initialUrl]);
   const [idx, setIdx] = useState(0);
   const [address, setAddress] = useState('');
   const addressRef = useRef<HTMLInputElement>(null);
@@ -92,8 +98,20 @@ export default function Browser() {
   };
 
   useEffect(() => {
+    if (!native) return;
     const off = onOpenInOsSearch((q) => performSearch(q));
     return off;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [native]);
+
+  useEffect(() => {
+    if (native) return;
+    const offUrl = onOpenInOsUrl((u) => goToUrl(u));
+    const offSearch = onOpenInOsSearch((q) => goToUrl(googleSearchUrl(q)));
+    return () => {
+      offUrl();
+      offSearch();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [native]);
 

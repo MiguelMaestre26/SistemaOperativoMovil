@@ -221,14 +221,18 @@ export default function App() {
 
   useEffect(() => {
     const fitPhone = () => {
-      const vw = window.innerWidth;
-      const vh = window.innerHeight;
+      const vw = window.visualViewport?.width ?? window.innerWidth;
+      const vh = window.visualViewport?.height ?? window.innerHeight;
       const s = Math.min(vw / W, vh / H);
       setScale(Math.min(s, 1.2));
     };
     fitPhone();
+    window.visualViewport?.addEventListener('resize', fitPhone);
     window.addEventListener('resize', fitPhone);
-    return () => window.removeEventListener('resize', fitPhone);
+    return () => {
+      window.visualViewport?.removeEventListener('resize', fitPhone);
+      window.removeEventListener('resize', fitPhone);
+    };
   }, [W, H]);
 
   useEffect(() => {
@@ -255,6 +259,7 @@ export default function App() {
 
   return (
     <div
+      className="aurora-shell"
       style={styles.pageWrapper}
       onPointerDown={handleDragStart}
       onPointerMove={handleDragMove}
@@ -266,15 +271,17 @@ export default function App() {
         data-frame
         style={{ ...styles.phoneFrame, width: W, height: H, transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})` }}
       >
-        {/* Bezel */}
-        <div style={styles.bezel}>
-          <div style={styles.dynamicIsland}>
-            <div style={styles.dynamicIslandInner} />
+        {/* Bezel — solo en escritorio; en web el OS ocupa la pantalla completa sin marco */}
+        {native && (
+          <div style={styles.bezel}>
+            <div style={styles.dynamicIsland}>
+              <div style={styles.dynamicIslandInner} />
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Screen */}
-        <div data-screen style={styles.screen}>
+        <div data-screen style={native ? styles.screen : styles.screenFull}>
           {wallpaper && (
             <div
               className="screen-wallpaper"
@@ -445,7 +452,7 @@ export default function App() {
               background: '#000',
               opacity: (100 - brightness) / 100,
               pointerEvents: 'none',
-              borderRadius: 46,
+              borderRadius: native ? 46 : 0,
             }}
           />
 
@@ -454,24 +461,28 @@ export default function App() {
           <ToastProvider />
         </div>
 
-        {/* Physical side buttons (interactive) */}
-        <div
-          style={styles.sideButtonRight1}
-          onPointerDown={handlePowerDown}
-          onPointerUp={handlePowerUp}
-          onPointerLeave={handlePowerUp}
-          aria-label="Botón de encendido"
-        />
-        <div
-          style={styles.sideButtonRight2}
-          onPointerDown={handleVolUp}
-          aria-label="Volumen arriba"
-        />
-        <div
-          style={styles.sideButtonLeft}
-          onPointerDown={handleVolDown}
-          aria-label="Volumen abajo"
-        />
+        {/* Physical side buttons (interactive) — solo en escritorio */}
+        {native && (
+          <>
+            <div
+              style={styles.sideButtonRight1}
+              onPointerDown={handlePowerDown}
+              onPointerUp={handlePowerUp}
+              onPointerLeave={handlePowerUp}
+              aria-label="Botón de encendido"
+            />
+            <div
+              style={styles.sideButtonRight2}
+              onPointerDown={handleVolUp}
+              aria-label="Volumen arriba"
+            />
+            <div
+              style={styles.sideButtonLeft}
+              onPointerDown={handleVolDown}
+              aria-label="Volumen abajo"
+            />
+          </>
+        )}
       </div>
 
       {native && (
@@ -488,7 +499,6 @@ export default function App() {
 const styles: Record<string, React.CSSProperties> = {
   pageWrapper: {
     width: '100vw',
-    height: '100vh',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -557,6 +567,18 @@ const styles: Record<string, React.CSSProperties> = {
     right: 4,
     bottom: 4,
     borderRadius: 46,
+    overflow: 'hidden',
+    background: 'var(--bg-primary)',
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  screenFull: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 0,
     overflow: 'hidden',
     background: 'var(--bg-primary)',
     display: 'flex',

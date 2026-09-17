@@ -1,5 +1,16 @@
 @import "tailwindcss";
 
+/* En iOS, 100vh incluye las barras del navegador y hace el lienzo más alto
+   de lo visible; 100dvh (o 100svh) respeta el viewport real. */
+.aurora-shell {
+  height: 100vh;
+}
+@supports (height: 100dvh) {
+  .aurora-shell {
+    height: 100dvh;
+  }
+}
+
 @theme {
   --font-sans: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
@@ -11,6 +22,9 @@
    ============================================================ */
 
 :root {
+  /* iOS auto-infla el texto si detecta cambios de orientación; lo evitamos. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
   /* ---- Superficies y texto (neutrales) ---- */
   --surface: #FDFCFF;
   --on-surface: #1A1C1E;

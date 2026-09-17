@@ -2,6 +2,7 @@ import { storageManager, type StorageItem } from './StorageManager';
 import { notificationService } from './NotificationService';
 import { useMediaStore } from '../stores/useMediaStore';
 import { isNative, nativeBinaryRequest, onNativeDownload, onNativeDownloadImage } from './native';
+import { openExternal } from './webapp';
 
 type ImageListener = (info: { filename: string; dataUrl: string }) => void;
 
@@ -49,6 +50,36 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
+function mimeFromDataUrl(dataUrl: string): string {
+  const m = /^data:([^;,]+)/.exec(dataUrl);
+  return m?.[1] || 'application/octet-stream';
+}
+
+// Web: intenta la descarga directa (sitios con CORS abierto) y si falla usa el
+// proxy del servidor (/proxy en dev o en un backend). Sin proxy ni CORS la
+// llamada lanza para que el caller pueda abrir la URL en una pestaña.
+async function fetchAsDataUrl(url: string): Promise<string> {
+  const DIRECT_TIMEOUT = 8000;
+
+  try {
+    const ac = new AbortController();
+    const t = setTimeout(() => ac.abort(), DIRECT_TIMEOUT);
+    const r = await fetch(url, { redirect: 'follow', signal: ac.signal });
+    clearTimeout(t);
+    if (r.ok) {
+      const blob = await r.blob();
+      return await blobToDataUrl(blob);
+    }
+  } catch {
+    /* CORS o red: intentamos el proxy */
+  }
+
+  const p = await fetch(`/proxy?url=${encodeURIComponent(url)}`, { redirect: 'follow' });
+  if (!p.ok) throw new Error(`HTTP ${p.status}`);
+  const blob = await p.blob();
+  return await blobToDataUrl(blob);
+}
+
 // Guarda una descarga (binario como data-URL) en Downloads y avisa.
 export function saveDownloadPayload(filename: string, mimeType: string, dataUrl: string): StorageItem | null {
   try {
@@ -74,8 +105,8 @@ export function saveDownloadPayload(filename: string, mimeType: string, dataUrl:
   }
 }
 
-// Descarga una URL y la guarda en Downloads. Web: vía /proxy. Nativo: fetch del
-// proceso principal (sin CORS) con base64.
+// Descarga una URL y la guarda en Downloads. Web: intenta fetch directo y cae a
+// /proxy si hace falta. Nativo: fetch del proceso principal (sin CORS) con base64.
 export async function saveUrlToStore(url: string): Promise<StorageItem | null> {
   try {
     const filename = fileNameFromUrl(url);
@@ -86,13 +117,13 @@ export async function saveUrlToStore(url: string): Promise<StorageItem | null> {
       }
       return saveDownloadPayload(filename, res.mimeType ?? 'application/octet-stream', res.dataUrl);
     }
-    const r = await fetch(`/proxy?url=${encodeURIComponent(url)}`);
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const blob = await r.blob();
-    const dataUrl = await blobToDataUrl(blob);
-    return saveDownloadPayload(filename, blob.type || 'application/octet-stream', dataUrl);
-  } catch (e) {
-    notificationService.push('browser', 'Descarga fallida', e instanceof Error ? e.message : 'Error');
+    const dataUrl = await fetchAsDataUrl(url);
+    return saveDownloadPayload(filename, mimeFromDataUrl(dataUrl), dataUrl);
+  } catch {
+    // Sin proxy (hosting estático) ni CORS: al menos abrimos la página para que
+    // la persona guarde el archivo manualmente.
+    openExternal(url);
+    notificationService.push('browser', 'Descarga no disponible', 'Se abrió la página de la descarga en una pestaña');
     return null;
   }
 }
